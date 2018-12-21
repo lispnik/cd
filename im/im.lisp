@@ -25,7 +25,8 @@
   "Draws an imImage on any canvas. Image must be a displayable
 image (imImageIsBitmap), and it can has an alpha channel."
   (cd-im-cffi::%cdf-canvas-put-im-image
-   canvas im-image (coerce x 'double-float)
+   canvas im-image
+   (coerce x 'double-float)
    (coerce y 'double-float)
    (coerce w 'double-float)
    (coerce h 'double-float)))
@@ -40,6 +41,11 @@ image (imImageIsBitmap)."
 image (color_space=IM_BINARY)."
   (cd-im-cffi::%cd-canvas-stipple-im-image canvas im-image))
 
+(defun get-im-image (canvas im-image x y)
+  "Retrieves the canvas contents in an imImage. Image must be a display RGB
+image (color_space=IM_RGB and data_type=IM_BYTE)."
+  (cd-im-cffi::%cd-canvas-get-im-image canvas im-image x y))
+
 (in-package #:wd-im)
 
 (export '(put-im-image))
@@ -48,7 +54,17 @@ image (color_space=IM_BINARY)."
   "Draws an imImage on any canvas. Image must be a displayable
 image (imImageIsBitmap), and it can has an alpha channel."
   (cd-im-cffi::%wd-canvas-put-im-image
-   canvas im-image (coerce x 'double-float)
+   canvas im-image
+   (coerce x 'double-float)
    (coerce y 'double-float)
    (coerce w 'double-float)
    (coerce h 'double-float)))
+
+(defun get-im-image (canvas im-image x y)
+  "Retrieves the canvas contents in an imImage. Image must be a display RGB
+image (color_space=IM_RGB and data_type=IM_BYTE)."
+  (cd-im-cffi::%wd-canvas-get-im-image
+   canvas
+   im-image
+   (coerce x 'double-float)
+   (coerce y 'double-float)))
