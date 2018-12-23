@@ -48,7 +48,8 @@ image (color_space=IM_RGB and data_type=IM_BYTE)."
 
 (in-package #:wd-im)
 
-(export '(put-im-image))
+(export '(put-im-image
+          get-im-image))
 
 (defun put-im-image (canvas im-image x y w h)
   "Draws an imImage on any canvas. Image must be a displayable
