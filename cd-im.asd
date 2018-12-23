@@ -3,6 +3,7 @@
   :pathname "im"
   :components ((:file "im"))
   :depends-on (#:cd-im-cffi
+               #:cd
                #:im
                #:cffi
                #:serapeum))
