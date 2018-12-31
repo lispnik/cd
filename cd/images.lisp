@@ -155,27 +155,6 @@ assumed."
            (coerce x ^type) (coerce y ^type) (coerce width ^type) (coerce height ^type)
            xmin xmax ymin ymax)))))
 
-
-(defwrappers ("canvas-get-im-image" "get-im-image" "cd")
-  (defun ^function-name (canvas image x y)
-    "The same as the GET-IMAGE-RGB functions except for the fact that use an
-IM:IM-IMAGE. Image must be a display RGB image (color_space=IM_RGB and
-data_type=IM_BYTE). See the CD IM-IMAGE context documentation. (since 5.9)"
-    (^cffi-function-name canvas image (coerce x ^type) (coerce y ^type))))
-
-(defwrappers ("canvas-put-im-image" "put-im-image")
-  (defun ^function-name ()
-    "The same as the above functions except for the fact that use an imImage
-structure. Image must be a displayable image (imImageIsBitmap), and it can has
-an alpha channel. See the CD IM-IMAGE documentation. (since 5.9)"
-    (^cffi-function-name
-     canvas
-     image
-     (coerce x ^type)
-     (coerce y ^type)
-     (coerce width ^type)
-     (coerce type ^type))))
-
 (defun rgb-to-map (image-width image-height red green blue &optional (palette-size 256))
   "Converts an RGB image into an image with 256 indexed colors, returning the
 INDEX and COLORS as values. The resulting image must have the same
