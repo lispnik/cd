@@ -25,6 +25,5 @@
 	       (:file "cd"))
   :depends-on (#:cd-cffi
                #:cffi
-               #:trivial-garbage
                #:alexandria
                #:serapeum))

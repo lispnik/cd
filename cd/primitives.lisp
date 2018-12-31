@@ -371,9 +371,7 @@ foreground and background colors must be set before setting the style."
 	    do (loop for i below w
 		     do (setf (cffi:mem-aref stipple-ptr :unsigned-char (+ (* j w) i))
 			      (coerce (aref new-stipple i j) 'bit))))
-      (cd-cffi::%cd-canvas-stipple canvas w h stipple-ptr)
-      ;; FIXME
-      (trivial-garbage:finalize canvas #'(lambda () (cffi:foreign-free stipple-ptr))))))
+      (cd-cffi::%cd-canvas-stipple canvas w h stipple-ptr))))
 
 (defun stipple (canvas)
   "Returns 2D array representing the stipple or NIL if no stipple is

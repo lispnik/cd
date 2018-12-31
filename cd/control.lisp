@@ -67,9 +67,10 @@ state memory after."
   "Modifies a custom attribute directly in the driver of the active canvas. If
 the driver does not have this attribute, the call is ignored. All drivers have
 the USERDATA attribute (since 5.9)."
-  (let ((new-value-ptr (cffi:foreign-string-alloc new-value)))
-    (trivial-garbage:finalize canvas #'(lambda () (cffi:foreign-string-free new-value-ptr)))
-    (cd-cffi::%cd-canvas-set-attribute canvas (attribute-name name) new-value-ptr)))
+  (cd-cffi::%cd-canvas-set-attribute
+   canvas
+   (attribute-name name)
+   new-value-ptr))
 
 (defun attribute (canvas name)
   "Returns a custom attribute from the driver of the active canvas. If the
