@@ -75,7 +75,7 @@ formula res=1.0/mm."
     (values (cffi:mem-ref x-ptr :double)
             (cffi:mem-ref y-ptr :double))))
 
-(define-cd-setf-expander origin cd-cffi::%cdf-canvas-origin 2 double-float
+(define-cd-setf-expander origin cd-cffi::%cdf-canvas-origin 2 'double-float
   "Sets the origin translation values x and y.
 
 Allows translating the origin - for instance, to the center of the canvas. The
