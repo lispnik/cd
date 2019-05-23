@@ -16,7 +16,7 @@ alignment. It expects an ANSI string. Can have line breaks."
     (^cffi-function-name canvas (coerce x ^type) (coerce y ^type) text)))
 
 (defwrappers ("canvas-font" "font" "cd")
-  (defun ^function-name (canvas typeface style size)
+  (defun (setf ^function-name) (canvas typeface style size)
     "Selects a text font. The font type can be one of the standard type faces or
 other driver dependent type face. Since font face names are not a standard
 between drivers, a few names are specially handled to improve application
@@ -64,7 +64,7 @@ driver."
                 (cffi:mem-ref style-ptr 'cd-cffi::font-style)
                 (cffi:mem-ref size-ptr ^cffi-type))))))
 
-(defwrappers ("canvas-get-font" "font-size" "cd")
+(defwrappers ("canvas-get-font-size" "font-size" "cd")
   (defun ^function-name (canvas)
     "Return the current selected font size."
     (cffi:with-foreign-objects
@@ -84,7 +84,7 @@ driver."
       (^cffi-function-name canvas (cffi:null-pointer) style-ptr size-ptr)
       new-font-size)))
 
-(defwrappers ("canvas-get-font" "font-style" "cd")
+(defwrappers ("canvas-get-font-style" "font-style" "cd")
   (defun ^function-name (canvas)
     "Return the current selected font style."
     (cffi:with-foreign-objects
