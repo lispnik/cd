@@ -113,6 +113,8 @@ File-Based Drivers
              (string
               (with-foreign-string (spec-ptr cffi-spec)
                 (cd-cffi::%cd-create-canvas context spec-ptr)))
+             (tecgraf-base:ihandle
+              (cd-cffi::%cd-create-canvas context (pffft:pointer cffi-spec)))
              (cffi:foreign-pointer
               (progn
                 (cd-cffi::%cd-create-canvas context cffi-spec))))))

@@ -24,6 +24,7 @@
                (:file "other")
 	       (:file "cd"))
   :depends-on (#:cd-cffi
+               #:tecgraf-base
                #:cffi
                #:alexandria
                #:serapeum))
