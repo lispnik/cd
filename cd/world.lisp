@@ -95,20 +95,18 @@ values for canvas → world."
 (defun translate (canvas dtx dty)
   "Translates the transformation by a delta, by adding the given values to the
 current tx and ty values."
-  (cffi:with-foreign-objects
-      ((x-ptr :double)
-       (y-ptr :double))
-    (cd-cffi::%wd-canvas-translate
-     canvas (coerce dtx 'double-float) (coerce dty 'double-float) x-ptr y-ptr)))
+  (cd-cffi::%wd-canvas-translate
+   canvas
+   (coerce dtx 'double-float)
+   (coerce dty 'double-float)))
 
 (defun scale (canvas dsx dsy)
   "Scales the transformation by a delta, by multiplying the given values by the
 current sx and sy values."
-  (cffi:with-foreign-objects
-      ((x-ptr :double)
-       (y-ptr :double))
-    (cd-cffi::%wd-canvas-scale
-     canvas (coerce dsx 'double-float) (coerce dsy 'double-float) x-ptr y-ptr)))
+  (cd-cffi::%wd-canvas-scale
+   canvas
+   (coerce dsx 'double-float)
+   (coerce dsy 'double-float)))
 
 (defun hardcopy ()
   "Creates a new canvas, prepares Window and Viewport according to the provided

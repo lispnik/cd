@@ -70,7 +70,7 @@ the USERDATA attribute (since 5.9)."
   (cd-cffi::%cd-canvas-set-attribute
    canvas
    (attribute-name name)
-   new-value-ptr))
+   new-value))
 
 (defun attribute (canvas name)
   "Returns a custom attribute from the driver of the active canvas. If the

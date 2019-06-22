@@ -15,42 +15,44 @@
 alignment. It expects an ANSI string. Can have line breaks."
     (^cffi-function-name canvas (coerce x ^type) (coerce y ^type) text)))
 
-(defwrappers ("canvas-font" "font" "cd")
-  (defun (setf ^function-name) (canvas typeface style size)
-    "Selects a text font. The font type can be one of the standard type faces or
-other driver dependent type face. Since font face names are not a standard
-between drivers, a few names are specially handled to improve application
-portability. If you want to use names that work for all systems we recommend
-using: \"Courier\", \"Times\" and \"Helvetica\".
+;;; TODO convert this function to (setf (font canvas) (values ... )):
 
-The style can be a combination of: 
+;; (defwrappers ("canvas-font" "font" "cd")
+;;   (defun (setf ^function-name) (canvas typeface style size)
+;;     "Selects a text font. The font type can be one of the standard type faces or
+;; other driver dependent type face. Since font face names are not a standard
+;; between drivers, a few names are specially handled to improve application
+;; portability. If you want to use names that work for all systems we recommend
+;; using: \"Courier\", \"Times\" and \"Helvetica\".
 
-:FONT-STYLE-PLAIN
-:FONT-STYLE-BOLD
-:FONT-STYLE-ITALIC
-:FONT-STYLE-UNDERLINE
-:FONT-STYLE-STRIKEOUT
+;; The style can be a combination of: 
 
-Only the Windows and PDF drivers support underline and strikeout. The size is
-provided in points (1/72 inch) or in pixels (using negative values).
+;; :FONT-STYLE-PLAIN
+;; :FONT-STYLE-BOLD
+;; :FONT-STYLE-ITALIC
+;; :FONT-STYLE-UNDERLINE
+;; :FONT-STYLE-STRIKEOUT
 
-Default values: \"System\", :FONT-STYLE-PLAIN, 12.
+;; Only the Windows and PDF drivers support underline and strikeout. The size is
+;; provided in points (1/72 inch) or in pixels (using negative values).
 
-;; FIXME support this too
-You can specify partial parameters using NULL, -1 and 0 for typeface, style and
-size. When these parameters are specified the current font parameter is
-used. For example: CanvasFont(NULL, -1, 10) will only change the font size.
+;; Default values: \"System\", :FONT-STYLE-PLAIN, 12.
 
-To convert between pixels and points use the function cdPixel2MM to convert from
-pixels to millimeters and use the formula \"(value in points) = CD_MM2PT
-* (value in millimeters).
+;; ;; FIXME support this too
+;; You can specify partial parameters using NULL, -1 and 0 for typeface, style and
+;; size. When these parameters are specified the current font parameter is
+;; used. For example: CanvasFont(NULL, -1, 10) will only change the font size.
 
-In WC, the size is specified in millimeters, but is internally converted to
-points.
+;; To convert between pixels and points use the function cdPixel2MM to convert from
+;; pixels to millimeters and use the formula \"(value in points) = CD_MM2PT
+;; * (value in millimeters).
 
-Fonts can heavily benefit from the ANTIALIAS attribute where available in the
-driver."
-    (^cffi-function-name canvas typeface style (coerce size ^type))))
+;; In WC, the size is specified in millimeters, but is internally converted to
+;; points.
+
+;; Fonts can heavily benefit from the ANTIALIAS attribute where available in the
+;; driver."
+;;     (^cffi-function-name canvas typeface style (coerce size ^type))))
 
 (defwrappers ("canvas-get-font" "font" "cd")
   (defun ^function-name (canvas)
@@ -64,45 +66,23 @@ driver."
                 (cffi:mem-ref style-ptr 'cd-cffi::font-style)
                 (cffi:mem-ref size-ptr ^cffi-type))))))
 
-(defwrappers ("canvas-get-font-size" "font-size" "cd")
-  (defun ^function-name (canvas)
-    "Return the current selected font size."
-    (cffi:with-foreign-objects
-        ((style-ptr :int)
-         (size-ptr ^cffi-type))
-      (setf (cffi:mem-ref style-ptr :int) -1)
-      (^cffi-function-name canvas (cffi:null-pointer) style-ptr size-ptr)
-      (cffi:mem-ref size-ptr ^cffi-type)))
+(defwrappers ("canvas-font" "font-typeface" "cd")
+  (defun (setf ^function-name) (new-font-typeface canvas)
+    "Set the current font typeface."
+    (^cffi-function-name canvas new-font-typeface :query 0)
+    new-font-typeface))
 
-  (defun (setf ^function-name) (new-font-size canvas)
-    "Set the current font size."
-    (cffi:with-foreign-objects
-        ((style-ptr :int)
-         (size-ptr ^cffi-type))
-      (setf (cffi:mem-ref style-ptr :int) -1
-            (cffi:mem-ref size-ptr ^cffi-type) (coerce new-font-size ^type))
-      (^cffi-function-name canvas (cffi:null-pointer) style-ptr size-ptr)
-      new-font-size)))
-
-(defwrappers ("canvas-get-font-style" "font-style" "cd")
-  (defun ^function-name (canvas)
-    "Return the current selected font style."
-    (cffi:with-foreign-objects
-        ((style-ptr :int)
-         (size-ptr ^cffi-type))
-      (setf (cffi:mem-ref size-ptr ^cffi-type) (coerce 0 ^type))
-      (^cffi-function-name canvas (cffi:null-pointer) style-ptr size-ptr)
-      (cffi:mem-ref style-ptr ^cffi-type)))
-
+(defwrappers ("canvas-font" "font-style" "cd")
   (defun (setf ^function-name) (new-font-style canvas)
     "Set the current font style."
-    (cffi:with-foreign-objects
-        ((style-ptr :int)
-         (size-ptr ^cffi-type))
-      (setf (cffi:mem-ref style-ptr ^cffi-type) new-font-style
-            (cffi:mem-ref size-ptr ^cffi-type) (coerce 0 ^type))
-      (^cffi-function-name canvas (cffi:null-pointer) style-ptr size-ptr)
-      new-font-style)))
+    (^cffi-function-name canvas nil new-font-style 0)
+    new-font-style))
+
+(defwrappers ("canvas-font" "font-size" "cd")
+  (defun (setf ^function-name) (new-font-size canvas)
+    "Set the current font size."
+    (^cffi-function-name canvas nil :query new-font-size)
+    new-font-size))
 
 (defun (setf native-font) (new-native-font canvas)
   "Selects a font based on a string description. 
