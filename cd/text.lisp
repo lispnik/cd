@@ -75,13 +75,13 @@ alignment. It expects an ANSI string. Can have line breaks."
 (defwrappers ("canvas-font" "font-style" "cd")
   (defun (setf ^function-name) (new-font-style canvas)
     "Set the current font style."
-    (^cffi-function-name canvas nil new-font-style 0)
+    (^cffi-function-name canvas (cffi:null-pointer) new-font-style 0)
     new-font-style))
 
 (defwrappers ("canvas-font" "font-size" "cd")
   (defun (setf ^function-name) (new-font-size canvas)
     "Set the current font size."
-    (^cffi-function-name canvas nil :query new-font-size)
+    (^cffi-function-name canvas (cffi:null-pointer) :query new-font-size)
     new-font-size))
 
 (defun (setf native-font) (new-native-font canvas)
