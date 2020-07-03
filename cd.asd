@@ -26,5 +26,4 @@
   :depends-on (#:cd-cffi
                #:tecgraf-base
                #:cffi
-               #:alexandria
-               #:serapeum))
+               #:alexandria))

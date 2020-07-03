@@ -3,4 +3,5 @@
   :pathname "im"
   :components ((:file "im-cffi"))
   :depends-on (#:im-cffi
-               #:cffi))
+               #:cffi
+               #:cd-cffi))

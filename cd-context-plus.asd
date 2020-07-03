@@ -4,5 +4,4 @@
   :components ((:file "context-plus"))
   :depends-on (#:cd-context-plus-cffi
 	       #:cffi
-	       #:alexandria
-	       #:serapeum))
+	       #:alexandria))

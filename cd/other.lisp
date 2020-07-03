@@ -31,8 +31,9 @@
           color-planes
           palette))
 
-(defalias version #'cd-cffi::%cd-version
-  "Returns the current version number of the library. The string with the
+(setf (fdefinition 'version) #'cd-cffi::%cd-version)
+(setf (documentation 'version 'function)
+      "Returns the current version number of the library. The string with the
 version number has a format \"major.minor.build\". 
 
 For instance, the string \"2.1.3\" has number 2 as the main (major) version
@@ -42,11 +43,13 @@ behavior of functions; the minor version number represents one or more new
 drivers and functions added to the library; and the build version number
 represents one or more corrected bugs.")
 
-(defalias version-date #'cd-cffi::%cd-version-date
-  "Returns the release date of the current version of the library.")
+(setf (fdefinition 'version-date) #'cd-cffi::%cd-version-date)
+(setf (documentation 'version-date 'function) 
+      "Returns the release date of the current version of the library.")
 
-(defalias version-number #'cd-cffi::%cd-version-date
-  "Returns the current version number of the library.")
+(setf (fdefinition 'version-number) #'cd-cffi::%cd-version-date)
+(setf (documentation 'version-number 'function)
+      "Returns the current version number of the library.")
 
 ;;; TODO
 

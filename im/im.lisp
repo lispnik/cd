@@ -1,16 +1,12 @@
 (defpackage #:cd-im
   (:use #:common-lisp
 	#:cffi)
-  (:export #:context-im-image)
-  (:shadow)
-  (:import-from	#:serapeum #:defalias))
+  (:export #:context-im-image))
 
 (defpackage #:wd-im
   (:use #:common-lisp
 	#:cffi)
-  (:export)
-  (:shadow)
-  (:import-from	#:serapeum #:defalias))
+  (:export))
 
 (in-package #:cd-im)
 
@@ -19,7 +15,7 @@
           pattern-im-image
           stipple-im-image))
 
-(defalias context-im-image #'cd-im-cffi::%cd-context-im-image)
+(setf (fdefinition 'context-im-image) #'cd-im-cffi::%cd-context-im-image)
 
 (defun put-im-image (canvas im-image x y w h)
   "Draws an imImage on any canvas. Image must be a displayable

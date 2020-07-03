@@ -496,7 +496,7 @@ current clipping area, then the path is discarded."
          (funcall func canvas))
     (end canvas)))
 
-(defalias call-with-vertexes #'call-with-vertices)
+(setf (fdefinition 'call-with-vertexes) #'call-with-vertices)
 
 (defmacro with-vertices ((canvas path-mode) &body body)
   (check-type canvas symbol)

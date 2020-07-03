@@ -3,4 +3,5 @@
   :pathname "cd"
   :components ((:file "cd-cffi")
 	       (:file "context-cffi"))
-  :depends-on (#:cffi))
+  :depends-on (#:cffi
+               #:tecgraf-base))

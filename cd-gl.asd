@@ -4,5 +4,4 @@
   :components ((:file "gl"))
   :depends-on (#:cd-gl-cffi
 	       #:cffi
-	       #:alexandria
-	       #:serapeum))
+	       #:alexandria))

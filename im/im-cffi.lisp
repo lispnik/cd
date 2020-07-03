@@ -14,15 +14,15 @@
 
 (cffi:defcfun (%cd-canvas-pattern-im-image "cdCanvasPatternImImage") :void
   (canvas cd-cffi:cd-canvas)
-  (image im-cffi:im-image))
+  (image tecgraf-base:im-image))
 
 (cffi:defcfun (%cd-canvas-stipple-im-image "cdCanvasStippleImImage") :void
   (canvas cd-cffi:cd-canvas)
-  (image im-cffi:im-image))
+  (image tecgraf-base:im-image))
 
 (cd-cffi::defcfun-cd/cdf/wd target ("canvas-put-im-image" "CanvasPutImImage") :void
   (canvas cd-cffi:cd-canvas)
-  (image im-cffi:im-image)
+  (image tecgraf-base:im-image)
   (x target)
   (y target)
   (w target)
@@ -30,6 +30,6 @@
 
 (cd-cffi::defcfun-cd/wd target ("canvas-get-im-image" "CanvasGetImImage") :void
   (canvas cd-cffi:cd-canvas)
-  (image im-cffi:im-image)
+  (image tecgraf-base:im-image)
   (x target)
   (y target))

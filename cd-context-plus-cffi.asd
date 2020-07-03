@@ -2,4 +2,5 @@
   :serial t
   :pathname "context-plus"
   :components ((:file "context-plus-cffi"))
-  :depends-on (#:cffi))
+  :depends-on (#:cffi
+               #:cd-cffi))

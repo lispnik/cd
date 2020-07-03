@@ -1,8 +1,7 @@
 (defpackage #:cd
   (:use #:common-lisp
 	#:cffi
-	#:alexandria
-	#:serapeum)
+	#:alexandria)
   (:export #:canvas #:context)
   (:shadow #:box))
 

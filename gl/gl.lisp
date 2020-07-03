@@ -1,8 +1,7 @@
 (defpackage #:cd-gl
   (:use #:common-lisp
         #:cffi
-        #:alexandria
-        #:serapeum)
+        #:alexandria)
   (:export)
   (:shadow))
 

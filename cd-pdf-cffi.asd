@@ -2,5 +2,5 @@
   :serial t
   :pathname "pdf"
   :components ((:file "pdf-cffi"))
-  :depends-on (#:cd-cffi
-	       #:cffi))
+  :depends-on (#:cffi
+	       #:cd-cffi))
