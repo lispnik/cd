@@ -218,5 +218,5 @@
 #+nil
 (sb-int:with-float-traps-masked
     (:invalid)
-  (cd:with-canvas (canvas (cd-pdf:context-pdf) "/tmp/foo.pdf -w150 -h110")
+  (cd:with-canvas (canvas (cd-pdf:context-pdf) "/tmp/simpleraw.pdf -w150 -h110")
     (simple-draw canvas)))
