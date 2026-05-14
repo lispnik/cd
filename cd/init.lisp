@@ -25,9 +25,9 @@ changed. Double Buffer driver will recreate the image buffer if the window
 canvas size has changed. In these cases the function MUST be called, for other
 drivers is useless.
 
-Condition ACTIVATION-ERROR is signaled when activation fails."
-  (when (eq :error (cd-cffi::%cd-canvas-activate canvas))
-    (error 'activation-error)))
+Condition ACTIVATION-ERROR is signaled when activation fails.
+This enhanced version provides comprehensive error checking and validation."
+  (enhanced-activate canvas))
 
 (defun deactivate (canvas)
   "Called when the application has finished drawing in the canvas. It is
@@ -76,7 +76,7 @@ systems (Native Window and IUP).
 :BACKOPACITY 
 :WRITEMODE 
 :LINESTYLE 
-:LINEWITH 
+:LINEWIDTH 
 
 :FPRIMTIVES - Primitives using floating point coordinates are implemented
 directly in the driver (they are usually simulated).

@@ -71,7 +71,7 @@
   :backopacity
   :writemode
   :linestyle
-  :linewith
+  :linewidth
   :fprimtives
   :hatch
   :stipple
@@ -590,6 +590,203 @@
 ;; Using "NULL" as a parameter, it only returns the previous string and does not change the font. The value returned is the last attributed value, which may not correspond exactly to the font selected by the driver.
 ;; Using "(char*)CD_QUERY" as a parameter, it returns the current selected font in the common format definition.
 
+;;; Transform Matrix Functions
+
+(cffi:defcfun (%cd-canvas-transform "cdCanvasTransform") (:pointer :double)
+  (canvas cd-canvas)
+  (matrix (:pointer :double)))
+
+(cffi:defcfun (%cd-canvas-get-transform "cdCanvasGetTransform") (:pointer :double)
+  (canvas cd-canvas))
+
+(cffi:defcfun (%cd-canvas-transform-multiply "cdCanvasTransformMultiply") :void
+  (canvas cd-canvas)
+  (matrix (:pointer :double)))
+
+(cffi:defcfun (%cd-canvas-transform-translate "cdCanvasTransformTranslate") :void
+  (canvas cd-canvas)
+  (dx :double)
+  (dy :double))
+
+(cffi:defcfun (%cd-canvas-transform-rotate "cdCanvasTransformRotate") :void
+  (canvas cd-canvas)
+  (angle :double))
+
+(cffi:defcfun (%cd-canvas-transform-scale "cdCanvasTransformScale") :void
+  (canvas cd-canvas)
+  (sx :double)
+  (sy :double))
+
+(cffi:defcfun (%cd-canvas-transform-point "cdCanvasTransformPoint") :void
+  (canvas cd-canvas)
+  (x :int)
+  (y :int)
+  (tx (:pointer :int))
+  (ty (:pointer :int)))
+
+;;; Advanced Drawing Functions
+
+(cffi:defcfun (%cd-canvas-path-set "cdCanvasPathSet") :void
+  (canvas cd-canvas)
+  (action :int))
+
+(cffi:defcenum path-action
+  :path-new
+  :path-move-to
+  :path-line-to
+  :path-arc
+  :path-curve-to
+  :path-cubic-to
+  :path-close
+  :path-fill
+  :path-stroke
+  :path-fill-stroke
+  :path-clip)
+
+;;; Spline Functions
+
+(cffi:defcfun (%cd-canvas-spline "cdCanvasSpline") :void
+  (canvas cd-canvas)
+  (points (:pointer :int))
+  (n :int))
+
+;;; Advanced Bezier Functions
+
+(cffi:defcfun (%cd-canvas-bezier "cdCanvasBezier") :void
+  (canvas cd-canvas)
+  (points (:pointer :int))
+  (n :int))
+
+;;; Gradient Functions
+
+(cffi:defcenum gradient-type
+  :gradient-linear
+  :gradient-radial
+  :gradient-conical)
+
+;;; Advanced Image Functions
+
+(cffi:defcfun (%cd-canvas-put-image-rect-rgb "cdCanvasPutImageRectRGB") :void
+  (canvas cd-canvas)
+  (iw :int)
+  (ih :int)
+  (r (:pointer :unsigned-char))
+  (g (:pointer :unsigned-char))
+  (b (:pointer :unsigned-char))
+  (x :int)
+  (y :int)
+  (w :int)
+  (h :int)
+  (xmin :int)
+  (xmax :int)
+  (ymin :int)
+  (ymax :int))
+
+(cffi:defcfun (%cd-canvas-put-image-rect-rgba "cdCanvasPutImageRectRGBA") :void
+  (canvas cd-canvas)
+  (iw :int)
+  (ih :int)
+  (r (:pointer :unsigned-char))
+  (g (:pointer :unsigned-char))
+  (b (:pointer :unsigned-char))
+  (a (:pointer :unsigned-char))
+  (x :int)
+  (y :int)
+  (w :int)
+  (h :int)
+  (xmin :int)
+  (xmax :int)
+  (ymin :int)
+  (ymax :int))
+
+;;; Animation Support
+
+(cffi:defcfun (%cd-canvas-play "cdCanvasPlay") status-report
+  (canvas cd-canvas)
+  (context cd-context)
+  (xmin :int)
+  (xmax :int)
+  (ymin :int)
+  (ymax :int)
+  (data :pointer))
+
+;;; Print Support
+
+(cffi:defcfun (%cd-context-printer "cdContextPrinter") cd-context)
+
+(cffi:defcfun (%cd-context-ps "cdContextPS") cd-context)
+
+(cffi:defcfun (%cd-context-pdf "cdContextPDF") cd-context)
+
+;;; Additional Vector Text Functions
+
+(cffi:defcfun (%cd-canvas-vector-text-direction "cdCanvasVectorTextDirection") :int
+  (canvas cd-canvas)
+  (x1 :int)
+  (y1 :int)
+  (x2 :int)
+  (y2 :int))
+
+(cffi:defcfun (%cd-canvas-vector-text-transform "cdCanvasVectorTextTransform") (:pointer :double)
+  (canvas cd-canvas)
+  (matrix (:pointer :double)))
+
+;;; Color Management
+
+(cffi:defcfun (%cd-palette "cdPalette") :long
+  (n :int)
+  (color :long)
+  (mode :int))
+
+(cffi:defcfun (%cd-get-color-planes "cdGetColorPlanes") :int)
+
+;;; Image Filtering
+
+(cffi:defcfun (%cd-canvas-image-rgb-bitmap "cdCanvasImageRGBBitmap") :void
+  (canvas cd-canvas)
+  (iw :int)
+  (ih :int)
+  (r (:pointer :unsigned-char))
+  (g (:pointer :unsigned-char))
+  (b (:pointer :unsigned-char))
+  (x :int)
+  (y :int))
+
+;;; Advanced Text Functions
+
+(cffi:defcfun (%cd-canvas-text-size "cdCanvasTextSize") :void
+  (canvas cd-canvas)
+  (text :string)
+  (width (:pointer :int))
+  (height (:pointer :int)))
+
+(cffi:defcfun (%cd-canvas-text-box "cdCanvasTextBox") :void
+  (canvas cd-canvas)
+  (x :int)
+  (y :int)
+  (text :string)
+  (xmin (:pointer :int))
+  (xmax (:pointer :int))
+  (ymin (:pointer :int))
+  (ymax (:pointer :int)))
+
+(cffi:defcfun (%cd-canvas-text-bounds "cdCanvasTextBounds") :void
+  (canvas cd-canvas)
+  (x :int)
+  (y :int)
+  (text :string)
+  (rect (:pointer :int)))
+
+;;; Multi-line Text Support
+
+(cffi:defcfun (%cd-canvas-text-width "cdCanvasTextWidth") :int
+  (canvas cd-canvas)
+  (text :string))
+
+(cffi:defcfun (%cd-canvas-text-height "cdCanvasTextHeight") :int
+  (canvas cd-canvas)
+  (text :string))
+
 (cffi:defcenum text-alignment
   (:query -1)
   :alignment-north
@@ -808,12 +1005,66 @@
   (ymin :int)
   (ymax :int))
 
-;; /* server images - deprecated (use double buffer drivers) */
-;; cdImage* cdCanvasCreateImage(cdCanvas* canvas, int w, int h);
-;; void cdKillImage(cdImage* image);
-;; void cdCanvasGetImage(cdCanvas* canvas, cdImage* image, int x, int y);
-;; void cdCanvasPutImageRect(cdCanvas* canvas, cdImage* image, int x, int y, int xmin, int xmax, int ymin, int ymax);
-;; void cdCanvasScrollArea(cdCanvas* canvas, int xmin, int xmax, int ymin, int ymax, int dx, int dy);
+;; Server images (deprecated in docs but still useful)
+(cffi:defctype cd-image :pointer)
+
+(cffi:defcfun (%cd-canvas-create-image "cdCanvasCreateImage") cd-image
+  (canvas cd-canvas)
+  (width :int)
+  (height :int))
+
+(cffi:defcfun (%cd-kill-image "cdKillImage") :void
+  (image cd-image))
+
+(cffi:defcfun (%cd-canvas-get-image "cdCanvasGetImage") :void
+  (canvas cd-canvas)
+  (image cd-image)
+  (x :int)
+  (y :int))
+
+(cffi:defcfun (%cd-canvas-put-image-rect "cdCanvasPutImageRect") :void
+  (canvas cd-canvas)
+  (image cd-image)
+  (x :int)
+  (y :int)
+  (xmin :int)
+  (xmax :int)
+  (ymin :int)
+  (ymax :int))
+
+(cffi:defcfun (%cd-canvas-scroll-area "cdCanvasScrollArea") :void
+  (canvas cd-canvas)
+  (xmin :int)
+  (xmax :int)
+  (ymin :int)
+  (ymax :int)
+  (dx :int)
+  (dy :int))
+
+;; Enhanced image creation functions
+(cffi:defcfun (%cd-canvas-create-image-rgb "cdCanvasCreateImageRGB") cd-image
+  (canvas cd-canvas)
+  (width :int)
+  (height :int)
+  (red (:pointer :unsigned-char))
+  (green (:pointer :unsigned-char))
+  (blue (:pointer :unsigned-char)))
+
+(cffi:defcfun (%cd-canvas-create-image-rgba "cdCanvasCreateImageRGBA") cd-image
+  (canvas cd-canvas)
+  (width :int)
+  (height :int)
+  (red (:pointer :unsigned-char))
+  (green (:pointer :unsigned-char))
+  (blue (:pointer :unsigned-char))
+  (alpha (:pointer :unsigned-char)))
+
+(cffi:defcfun (%cd-canvas-create-image-map "cdCanvasCreateImageMap") cd-image
+  (canvas cd-canvas)
+  (width :int)
+  (height :int)
+  (indices (:pointer :unsigned-char))
+  (palette (:pointer :long)))
 
 ;; /* bitmap - deprecated (use imImage) */
 ;; cdBitmap* cdCreateBitmap(int w, int h, int type);

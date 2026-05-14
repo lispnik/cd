@@ -71,13 +71,14 @@ with the same driver/data pair, this is not recommended, and its behavior is not
 specified. Each canvas maintains its own features.
 
 In case of failure, a condition of type CD:INITIALIZATION-ERROR is raised.
+This enhanced version provides comprehensive error checking and validation.
 
 The following predefined drivers are available:
 
 Window-Base Drivers
 
 FIXME convert to Lisp documenation:
- 
+
     CD_IUP = IUP Canvas (cdiup.h).
     CD_NATIVEWINDOW = Native Window (cdnative.h).
     CD_GL = Native Window (cdgl.h).
@@ -88,14 +89,14 @@ Device-Based Drivers
     CD_PRINTER = Printer (cdprint.h).
     CD_PICTURE = Picture in memory (cdpicture.h).
 
-Image-Based Drivers 
+Image-Based Drivers
 
     CD_IMAGE = Server-Image Drawing (cdimage.h).
     CD_IMAGERGB = Client-Image Drawing (cdirgb.h).
     CD_DBUFFER = Offscreen Drawing (cddbuf.h).
     CD_DBUFFERRGB = Client Offscreen Drawing (cddbuf.h).
 
-File-Based Drivers 
+File-Based Drivers
 
     CD_PDF = Adobe Portable Document Format (cdpdf.h).
     CD_PS = PostScript File (cdps.h).
@@ -107,18 +108,7 @@ File-Based Drivers
     CD_DXF = AutoCad Drawing Interchange File (cddxf.h).
     CD_EMF = Microsoft Windows Enhanced Metafile (cdemf.h). Works only in MS Windows systems.
     CD_WMF = Microsoft Windows Metafile (cdwmf.h). Works only in MS Windows systems."
-  (let* ((cffi-spec (or spec (cffi:null-pointer)))
-	 (canvas
-           (etypecase cffi-spec
-             (string
-              (with-foreign-string (spec-ptr cffi-spec)
-                (cd-cffi::%cd-create-canvas context spec-ptr)))
-             (cffi:foreign-pointer
-              (progn
-                (cd-cffi::%cd-create-canvas context cffi-spec))))))
-    (if (cffi:null-pointer-p canvas)
-	(error 'initialization-error :spec spec)
-	canvas)))
+  (enhanced-create-canvas context spec))
 
 (defun call-with-canvas (context spec func)
   (let ((canvas (create-canvas context spec)))

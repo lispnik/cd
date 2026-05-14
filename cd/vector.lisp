@@ -10,7 +10,7 @@
           vector-text-bounds
           vector-text-box))
 
-(export '(wd::vector-text-bounds) (find-package "WD"))
+(export '(vector-text-bounds) (find-package "WD"))
 
 (defwrappers ("canvas-vector-text" "vector-text" "cd")
   "Draws a vector text in position (x,y), respecting the alignment defined by
@@ -145,7 +145,8 @@ values."
     (values (cffi:mem-ref w-ptr :double)
             (cffi:mem-ref h-ptr :double))))
 
-(defun wd::vector-text-bounds (canvas text x y)
+(setf (symbol-function (intern "VECTOR-TEXT-BOUNDS" (find-package "WD")))
+      (lambda (canvas text x y)
   "Returns the oriented bounding rectangle occupied by a text at a given
 position. The rectangle has the same dimentions returned by
 VECTOR-TEXT-SIZE. The rectangle corners are returned in counter-clock wise order
@@ -160,7 +161,7 @@ arranged x0, y0, x1, y1, x2, y2, x3, y3."
      rect-ptr)
     (loop for i below 8
           collect (cffi:mem-aref rect-ptr :double i) into result
-          finally (return (values-list result)))))
+          finally (return (values-list result))))))
 
 (defun vector-text-box (canvas text x y)
   "Returns the horizontal bounding rectangle occupied by a text at a given

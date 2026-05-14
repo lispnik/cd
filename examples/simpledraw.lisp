@@ -90,7 +90,7 @@
           (y 0.35))
       (multiple-value-bind
             (x0 y0 x1 y1 x2 y2 x3 y3)
-          (wd::vector-text-bounds canvas text 0.25 0.35)
+          (wd:vector-text-bounds canvas text 0.25 0.35)
         (cd:with-vertices (canvas :path-mode-closed-lines)
           (wd:vertex canvas x0 y0)
           (wd:vertex canvas x1 y1)
