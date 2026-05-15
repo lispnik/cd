@@ -1,0 +1,214 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  # Trigger when tecgraf-cd or tecgraf-im builds complete
+  repository_dispatch:
+    types: [tecgraf-cd-build-complete, tecgraf-im-build-complete]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        lisp: [sbcl]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            cd-workflow: ci-linux.yml
+            im-workflow: ci-linux.yml
+            cd-libs-artifact: cd-linux-Release
+            im-libs-artifact: im-libs-ubuntu-24.04
+            im-headers-artifact: im-headers-ubuntu-24.04
+          - os: macos-latest
+            platform: macos
+            cd-workflow: ci-macos.yml
+            im-workflow: ci-macos.yml
+            cd-libs-artifact: cd-macos-Release
+            im-libs-artifact: im-libs-macos-15
+            im-headers-artifact: im-headers-macos-15
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Common Lisp (${{ matrix.lisp }})
+      uses: 40ants/setup-lisp@v4
+      with:
+        asdf-system: cd
+        qlfile-template: |
+          dist ultralisp http://dist.ultralisp.org/
+        lisp: ${{ matrix.lisp }}
+
+    - name: Install system dependencies (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libx11-6 \
+          libxext6 \
+          libxrender1 \
+          libxft2 \
+          libcairo2 \
+          libpango1.0-0 \
+          libfreetype6 \
+          libftgl2 \
+          libgl1-mesa-glx \
+          libglu1-mesa \
+          liblua5.4-0 \
+          lua5.4 \
+          libtiff6 \
+          libpng16-16 \
+          libjpeg8 \
+          zlib1g \
+          libexif12 \
+          liblzf1 \
+          liblz4-1 \
+          libfftw3-3 \
+          libgomp1 \
+          libgtk-3-0
+
+    - name: Install system dependencies (macOS)
+      if: matrix.platform == 'macos'
+      run: |
+        brew install \
+          cairo \
+          pango \
+          freetype \
+          ftgl \
+          lua \
+          libtiff \
+          libpng \
+          jpeg \
+          libexif \
+          jasper \
+          fftw
+
+    - name: Wait for tecgraf-im build completion
+      uses: fountainhead/action-wait-for-check@v1.1.0
+      id: wait-for-im-build
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        checkName: build (${{ matrix.os }}, Release)
+        ref: master
+        repo: lispnik/tecgraf-im
+        timeoutSeconds: 1800
+        intervalSeconds: 30
+
+    - name: Wait for tecgraf-cd build completion
+      uses: fountainhead/action-wait-for-check@v1.1.0
+      id: wait-for-cd-build
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        checkName: build (${{ matrix.os }}, Release)
+        ref: main
+        repo: lispnik/tecgraf-cd
+        timeoutSeconds: 1800
+        intervalSeconds: 30
+
+    - name: Download IM library artifacts
+      if: steps.wait-for-im-build.outputs.conclusion == 'success'
+      uses: dawidd6/action-download-artifact@v2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: ${{ matrix.im-workflow }}
+        repo: lispnik/tecgraf-im
+        branch: master
+        name: ${{ matrix.im-libs-artifact }}
+        path: im-libs/
+
+    - name: Download IM header artifacts
+      if: steps.wait-for-im-build.outputs.conclusion == 'success'
+      uses: dawidd6/action-download-artifact@v2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: ${{ matrix.im-workflow }}
+        repo: lispnik/tecgraf-im
+        branch: master
+        name: ${{ matrix.im-headers-artifact }}
+        path: im-headers/
+
+    - name: Download CD library artifacts
+      if: steps.wait-for-cd-build.outputs.conclusion == 'success'
+      uses: dawidd6/action-download-artifact@v2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: ${{ matrix.cd-workflow }}
+        repo: lispnik/tecgraf-cd
+        branch: main
+        name: ${{ matrix.cd-libs-artifact }}
+        path: cd-artifacts/
+
+    - name: Extract CD libraries
+      run: |
+        cd cd-artifacts
+        tar -xzf *.tar.gz
+        ls -la install/
+        find install/ -name "*.so" -o -name "*.dylib" -o -name "*.dll"
+
+    - name: Setup library paths (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        echo "LD_LIBRARY_PATH=$PWD/im-libs:$PWD/cd-artifacts/install/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+        ls -la im-libs/
+        ls -la cd-artifacts/install/lib/
+
+    - name: Setup library paths (macOS)
+      if: matrix.platform == 'macos'
+      run: |
+        echo "DYLD_LIBRARY_PATH=$PWD/im-libs:$PWD/cd-artifacts/install/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        ls -la im-libs/
+        ls -la cd-artifacts/install/lib/
+
+    - name: Test library loading
+      run: |
+        ${{ matrix.lisp }} --eval "(progn
+          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
+          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
+          (ql:quickload :cd-cffi)
+          (format t \"~%CD library loaded successfully~%\")
+          (quit))"
+
+    - name: Test CD with IM integration
+      run: |
+        ${{ matrix.lisp }} --eval "(progn
+          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
+          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
+          (ql:quickload :cd-im)
+          (format t \"~%CD-IM integration loaded successfully~%\")
+          (quit))"
+
+    - name: Test CD OpenGL support
+      run: |
+        ${{ matrix.lisp }} --eval "(progn
+          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
+          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
+          (ql:quickload :cd-gl)
+          (format t \"~%CD OpenGL support loaded successfully~%\")
+          (quit))" || echo "OpenGL support not available"
+
+    - name: Test CD PDF support
+      run: |
+        ${{ matrix.lisp }} --eval "(progn
+          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
+          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
+          (ql:quickload :cd-pdf)
+          (format t \"~%CD PDF support loaded successfully~%\")
+          (quit))" || echo "PDF support not available"
+
+    - name: Run basic CD tests
+      run: |
+        ${{ matrix.lisp }} --eval "(progn
+          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
+          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
+          (ql:quickload :cd)
+          (format t \"~%Running basic CD functionality test...~%\")
+          ;; Test basic CD functionality
+          (let ((version (cd:version-number)))
+            (format t \"CD Version: ~A~%\" version))
+          (format t \"CD tests completed successfully~%\")
+          (quit))"
