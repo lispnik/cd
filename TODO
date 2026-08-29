@@ -21,14 +21,16 @@ Open questions
   could stay source-only via ocicl, or tag source releases.
 
 Coverage gaps
-* The IM bridge is untested on CI. lispnik/tecgraf-cd builds with
+* The PS driver is absent from the Windows build, so that test skips there.
+  Everything else runs on every platform.
+
+  The IM bridge was in this list until lispnik/tecgraf-cd v2.0.0. It had
   CD_ENABLE_IM=OFF in all three CI workflows and in release.yml, so no
-  published artifact has cdCanvasPutImImage and the three bridge tests skip
-  on every platform. They pass locally, where Homebrew's tecgraf-cd does have
-  it. Turning the option on upstream is what would restore the coverage; the
-  IM artifacts are already downloaded there and then unused.
-* The PS driver is absent from the Windows build, so that test skips there
-  too. Together: 3 skips on Linux and macOS, 4 on Windows.
+  published artifact had cdCanvasPutImImage and the three bridge tests
+  skipped everywhere. Upstream now builds with the driver on, takes IM from a
+  pinned release rather than from CI artifacts that expire after 14 days, and
+  asserts cdCanvasPutImImage is reachable rather than trusting the flag.
+  Linux amd64 went from 167 checks with 3 skips to 175 with none.
 
 Upstream
 * lispnik/tecgraf-cd emits no repository_dispatch, so a CD change does not
