@@ -84,17 +84,18 @@ raster, so what comes out is what went in."
   "Both take an IM:IMAGE and change how later filled shapes are painted.
 CD reports nothing back, so the assertion is that the fill still happens and
 the canvas survives -- a wrong pointer here would crash rather than fail."
-  (im:with-image (tile (im:create 8 8 :color-space-rgb :data-type-byte))
-    (dotimes (plane 3)
-      (dotimes (i (im:pixel-count tile))
-        (setf (cffi:mem-aref (im:plane-pointer tile plane) :unsigned-char i) 128)))
-    (cd:with-canvas (c (cd:image-rgb-canvas 64 64))
-      (finishes (cd:pattern-image c tile))
-      (is (eq :pattern (cd:interior-style c))
-          "CD switches interior style to :pattern as a side effect")
-      (finishes (cd:box c 0 32 0 32))
-      (finishes (cd:stipple-image c tile))
-      (finishes (cd:box c 32 64 32 64)))))
+  (with-im-bridge
+    (im:with-image (tile (im:create 8 8 :color-space-rgb :data-type-byte))
+      (dotimes (plane 3)
+        (dotimes (i (im:pixel-count tile))
+          (setf (cffi:mem-aref (im:plane-pointer tile plane) :unsigned-char i) 128)))
+      (cd:with-canvas (c (cd:image-rgb-canvas 64 64))
+        (finishes (cd:pattern-image c tile))
+        (is (eq :pattern (cd:interior-style c))
+            "CD switches interior style to :pattern as a side effect")
+        (finishes (cd:box c 0 32 0 32))
+        (finishes (cd:stipple-image c tile))
+        (finishes (cd:box c 32 64 32 64))))))
 
 ;;; ---------------------------------------------------------------------------
 

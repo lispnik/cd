@@ -1,8 +1,8 @@
 ;;;; tests/package.lisp — suite definition.
 ;;;;
-;;;; A starter suite. It covers what the binding currently has -- the library
-;;;; loading, the driver registry, canvas lifetime and the conditions -- and
-;;;; deliberately not the drawing API, which is not wrapped yet. See the TODO.
+;;;; Suite definitions and the helpers shared across the test files: a
+;;;; temporary directory, and WITH-IM-BRIDGE for the tests that need a libcd
+;;;; built with CD_ENABLE_IM.
 
 (defpackage #:cd.tests
   (:use #:common-lisp #:fiveam)
@@ -28,6 +28,28 @@
 (defun file-size (path)
   (with-open-file (s path :element-type '(unsigned-byte 8)) (file-length s)))
 
+(defmacro with-im-bridge (&body body)
+  "Run BODY only where libcd provides the IM bridge, and skip otherwise.
+
+CD compiles its drivers in per CMake option, so a libcd built with
+CD_ENABLE_IM=OFF has no cdCanvasPutImImage at all -- which is why the binding
+offers IM-BRIDGE-AVAILABLE-P rather than assuming. A test that failed instead
+of skipping would be asserting how libcd happened to be configured, not
+anything about this binding.
+
+A skip is not as good as a pass: where these tests skip, the bridge is
+genuinely uncovered."
+  `(if (cd:im-bridge-available-p)
+       (progn ,@body)
+       (skip "libcd was built without CD_ENABLE_IM; the IM bridge is absent.")))
+
+(defun optional-binding-p (name)
+  "True for a binding a legitimate build of libcd may simply not contain.
+
+Only the IM bridge so far: its entry points all carry ImImage in the name.
+Everything else this binding declares is unconditional in CD's sources."
+  (and (search "ImImage" name) t))
+
 ;;; ---------------------------------------------------------------------------
 
 (def-suite library-suite :in cd-suite
@@ -48,10 +70,18 @@
 The check the previous binding lacked, and the reason ten dead entries
 survived in it: cdCanvasBezier, cdCanvasSpline and cdCanvasTextBounds among
 them were declared in headers that no library implements."
-  (let ((missing (remove-if #'cffi:foreign-symbol-pointer cd.ffi::*bindings*)))
-    (is (null missing)
+  (let* ((missing (remove-if #'cffi:foreign-symbol-pointer cd.ffi::*bindings*))
+         (optional (remove-if-not #'optional-binding-p missing))
+         (required (remove-if #'optional-binding-p missing)))
+    ;; Absent optional entry points are reported, not asserted on: this test
+    ;; exists to catch bindings to functions no build of CD provides, which is
+    ;; a different thing from a driver this build was configured without.
+    (when optional
+      (format t "~&; ~D optional binding~:P absent from this libcd: ~{~A~^, ~}~%"
+              (length optional) optional))
+    (is (null required)
         "~D bound function~:P do not exist in the loaded libcd: ~{~A~^, ~}"
-        (length missing) missing)))
+        (length required) required)))
 
 (test drivers-are-reported
   "DRIVERS asks the library rather than assuming: CD compiles its drivers in

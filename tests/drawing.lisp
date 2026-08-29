@@ -231,15 +231,21 @@ it leaves every later caller drawing at an angle."
 (def-suite im-bridge-suite :in cd-suite :description "The CD <-> IM bridge.")
 (in-suite im-bridge-suite)
 
-(test bridge-is-available
-  "libcd here is built against libim, so the bridge should be present.
-A build with CD_ENABLE_IM=OFF would legitimately report NIL."
-  (is-true (cd:im-bridge-available-p)))
+(test bridge-availability-is-reported-honestly
+  "IM-BRIDGE-AVAILABLE-P must agree with whether the entry point is really there.
+
+Either answer is legitimate -- CD compiles the bridge in only when
+CD_ENABLE_IM was on. What would not be legitimate is claiming the bridge is
+present when cdCanvasPutImImage is absent, because then every bridge call
+goes to a null pointer and crashes instead of signalling."
+  (is (eq (and (cffi:foreign-symbol-pointer "cdCanvasPutImImage") t)
+          (cd:im-bridge-available-p))))
 
 (test image-drawn-onto-a-canvas-can-be-read-back
   "The round trip both bindings have to agree on: an IM image drawn onto a CD
 canvas, then captured back into a new IM image."
-  (im:with-image (source (im:create 64 48 :color-space-rgb :data-type-byte))
+  (with-im-bridge
+   (im:with-image (source (im:create 64 48 :color-space-rgb :data-type-byte))
     ;; Fill every plane so the captured mean is unambiguous.
     (dotimes (plane 3)
       (dotimes (i (im:pixel-count source))
@@ -252,9 +258,10 @@ canvas, then captured back into a new IM image."
         (is (eq :color-space-rgb (im:color-space grabbed)))
         ;; The region captured is inside where the image was drawn, so it must
         ;; carry the value written above rather than the blank background.
-        (is (< 190d0 (getf (im:statistics grabbed) :mean) 210d0))))))
+        (is (< 190d0 (getf (im:statistics grabbed) :mean) 210d0)))))))
 
 (test put-image-scales-when-asked
-  (im:with-image (source (im:create 16 16 :color-space-rgb :data-type-byte))
-    (cd:with-canvas (c (cd:image-rgb-canvas 100 100))
-      (finishes (cd:put-image c source :x 0 :y 0 :width 64 :height 64)))))
+  (with-im-bridge
+   (im:with-image (source (im:create 16 16 :color-space-rgb :data-type-byte))
+     (cd:with-canvas (c (cd:image-rgb-canvas 100 100))
+       (finishes (cd:put-image c source :x 0 :y 0 :width 64 :height 64))))))
