@@ -23,25 +23,28 @@ jobs:
         include:
           - name: Linux amd64
             os: ubuntu-24.04
-            source: brew
-          # No upstream artifact is needed here: brew builds CD and IM from
-          # source, so the arm64 Linux leg works on the same footing as amd64.
-          # Upstream now publishes arm64 artifacts too, for consumers that
-          # take the artifact route.
+            cd-artifact: cd-linux-amd64-Release
+            cd-workflow: ci-linux.yml
+            im-artifact: im-libs-ubuntu-24.04
+            im-workflow: ci-linux.yml
           - name: Linux arm64
             os: ubuntu-24.04-arm
-            source: brew
+            cd-artifact: cd-linux-arm64-Release
+            cd-workflow: ci-linux.yml
+            im-artifact: im-libs-ubuntu-24.04-arm
+            im-workflow: ci-linux.yml
           - name: macOS arm64
             os: macos-15
-            source: brew
-          # Windows has no Homebrew, so it consumes the upstream CI artifacts
-          # instead. Both are needed: libcd links against libim, and the CD
-          # artifact carries only CD's own install tree.
+            cd-artifact: cd-macos-Release-arm64
+            cd-workflow: ci-macos.yml
+            im-artifact: im-libs-macos-15
+            im-workflow: ci-macos.yml
           - name: Windows x64
             os: windows-2022
-            source: artifacts
             cd-artifact: cd-windows-Release
+            cd-workflow: ci-windows.yml
             im-artifact: im-libs-windows-2022
+            im-workflow: ci-windows.yml
 
     defaults:
       run:
@@ -66,85 +69,120 @@ jobs:
           choco install sbcl --no-progress -y
           cygpath -w "/c/Program Files/Steel Bank Common Lisp" >> "$GITHUB_PATH"
 
-      # CD and IM both come from the maintainer's tap, and tecgraf-cd already
-      # depends_on tecgraf-im -- so one install provides both libraries and
-      # every third-party dependency they were linked against.
+      # Libraries come from each upstream project's own CI, on every
+      # platform. The maintainer's Homebrew tap would be tidier and was tried
+      # first, but it does not work here for two independent reasons:
       #
-      # This is deliberately not the artifact route used for Windows below.
-      # Artifacts have to be paired by upstream run, unpacked, and on macOS
-      # repaired with install_name_tool because they carry absolute install
-      # names baked to the builder's path. brew has none of those problems;
-      # the cost is that the formulae build from source, so this step is the
-      # slow one.
-      - name: Install CD and IM from the tap
-        if: matrix.source == 'brew'
-        run: |
-          brew tap lispnik/tecgraf
-          # Homebrew now refuses to load a formula from an untrusted
-          # third-party tap: "Refusing to load formula
-          # lispnik/tecgraf/tecgraf-im from untrusted tap". Trusting it is the
-          # documented answer and the right one here -- it is the same account
-          # that owns this repository. The alternative,
-          # HOMEBREW_NO_REQUIRE_TAP_TRUST=1, disables the check globally and
-          # Homebrew says it will be removed.
-          #
-          # Tolerated failure because `brew trust` is recent: an older
-          # Homebrew has no such subcommand and no such requirement, and the
-          # install below works either way.
-          brew trust lispnik/tecgraf || true
-          brew install lispnik/tecgraf/tecgraf-cd
-          echo "CD_LIBRARY_PATH=$(brew --prefix tecgraf-cd)/lib" >> "$GITHUB_ENV"
-          echo "IM_LIBRARY_PATH=$(brew --prefix tecgraf-im)/lib" >> "$GITHUB_ENV"
-          ls -la "$(brew --prefix tecgraf-cd)/lib" "$(brew --prefix tecgraf-im)/lib"
+      #   GitHub's Ubuntu runners have no Homebrew at all -- `brew: command
+      #   not found` -- so Linux could never have used it.
+      #
+      #   On macOS the tap installs tecgraf-im fine and then fails building
+      #   tecgraf-cd with "fatal error: 'glib.h' file not found". CD's
+      #   cd_util.c includes <glib.h> on any non-Windows build that does not
+      #   define USE_ICONV, but CD's CMake never looks for glib, so the include
+      #   path only appears when some other dependency's pkg-config happens to
+      #   supply it. That is an upstream build issue, not something to work
+      #   around here.
+      #
+      # Artifacts avoid both: they are built by each project's own CI, which
+      # gets the dependency handling right, and nothing is compiled here.
 
-      - name: Download CD artifact (Windows)
-        if: matrix.source == 'artifacts'
+      - name: Install runtime dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libtiff6 libjpeg8 libpng16-16 zlib1g libexif12 liblzf1 liblz4-1 \
+            libfftw3-double3 libfftw3-single3 libgomp1 \
+            libcairo2 libfreetype6 libfontconfig1 libglib2.0-0 \
+            libx11-6 libxext6 libxrender1 libxft2 liblua5.4-0
+
+      - name: Install runtime dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install libtiff jpeg-turbo libpng libexif liblzf lz4 fftw libomp \
+                       cairo freetype fontconfig glib ftgl lua
+
+      - name: Download the CD libraries
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           repo: lispnik/tecgraf-cd
-          workflow: ci-windows.yml
+          workflow: ${{ matrix.cd-workflow }}
           # tecgraf-cd's default branch is main; tecgraf-im's is master.
           branch: main
           name: ${{ matrix.cd-artifact }}
           path: cd-libs/
 
-      - name: Download IM artifact (Windows)
-        if: matrix.source == 'artifacts'
+      - name: Download the IM libraries
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           repo: lispnik/tecgraf-im
-          workflow: ci-windows.yml
+          workflow: ${{ matrix.im-workflow }}
           branch: master
           name: ${{ matrix.im-artifact }}
           path: im-libs/
 
-      - name: Unpack and locate the libraries (Windows)
-        if: matrix.source == 'artifacts'
+      - name: Unpack and locate the libraries
         run: |
-          # The CD artifact is a tarball of the install tree, not a flat
-          # directory of libraries the way IM's is.
+          # CD ships a tarball of its install tree; IM ships build/lib
+          # directly. Untar whatever is there and then search, rather than
+          # assuming either shape.
           find cd-libs -name '*.tar.gz' -exec tar -xzf {} -C cd-libs \; || true
-          echo "artifact contents:"; ls -R cd-libs | head -40
+          echo "CD artifact:"; ls -R cd-libs | head -30
 
           # Test the search result BEFORE dirname. `dirname ""` is ".", which
-          # is non-empty, so the guard below passed on an empty search and
-          # CD_LIBRARY_PATH became the repository root -- the binding then
-          # reported LIBRARY-NOT-FOUND having searched exactly one useless
-          # directory, several steps later and with nothing pointing here.
-          cd_dll="$(find cd-libs \( -name 'cd.dll' -o -name 'libcd.dll' \) | head -1)"
-          test -n "$cd_dll" || { echo "::error::no cd.dll in the CD artifact"; exit 1; }
-          cd_dir="$(dirname "$cd_dll")"
-          test -n "$(find im-libs -name 'im.dll' -o -name 'libim.dll' | head -1)" \
-            || { echo "::error::no im.dll in the IM artifact"; ls -R im-libs | head -20; exit 1; }
-          echo "cd.dll in $cd_dir"
-          echo "CD_LIBRARY_PATH=$(cygpath -m "$PWD/$cd_dir")" >> "$GITHUB_ENV"
-          echo "IM_LIBRARY_PATH=$(cygpath -m "$PWD/im-libs")" >> "$GITHUB_ENV"
-          # Windows resolves dependent DLLs through PATH, and these load each
-          # other, so both directories have to be on it.
-          cygpath -w "$PWD/$cd_dir" >> "$GITHUB_PATH"
-          cygpath -w "$PWD/im-libs" >> "$GITHUB_PATH"
+          # is non-empty, so a guard placed after it passes on an empty search;
+          # that is how CD_LIBRARY_PATH once became the repository root and the
+          # failure surfaced several steps later as LIBRARY-NOT-FOUND.
+          cd_lib="$(find cd-libs \( -name 'libcd.so*' -o -name 'libcd*.dylib' \
+                                     -o -name 'cd.dll' -o -name 'libcd.dll' \) | head -1)"
+          test -n "$cd_lib" || { echo "::error::no libcd in the CD artifact"; exit 1; }
+          cd_dir="$(dirname "$cd_lib")"
+
+          im_lib="$(find im-libs \( -name 'libim.so*' -o -name 'libim*.dylib' \
+                                     -o -name 'im.dll' -o -name 'libim.dll' \) | head -1)"
+          test -n "$im_lib" || { echo "::error::no libim in the IM artifact"; exit 1; }
+          im_dir="$(dirname "$im_lib")"
+          echo "libcd in $cd_dir"; echo "libim in $im_dir"
+
+          cd_abs="$PWD/$cd_dir"; im_abs="$PWD/$im_dir"
+          case "$RUNNER_OS" in
+            Linux)   echo "LD_LIBRARY_PATH=$cd_abs:$im_abs:$LD_LIBRARY_PATH"   >> "$GITHUB_ENV" ;;
+            macOS)   echo "DYLD_LIBRARY_PATH=$cd_abs:$im_abs:$DYLD_LIBRARY_PATH" >> "$GITHUB_ENV" ;;
+            Windows) cygpath -w "$cd_abs" >> "$GITHUB_PATH"
+                     cygpath -w "$im_abs" >> "$GITHUB_PATH" ;;
+          esac
+          if [ "$RUNNER_OS" = Windows ]; then
+            cd_abs="$(cygpath -m "$cd_abs")"; im_abs="$(cygpath -m "$im_abs")"
+          fi
+          echo "CD_LIBRARY_PATH=$cd_abs" >> "$GITHUB_ENV"
+          echo "IM_LIBRARY_PATH=$im_abs" >> "$GITHUB_ENV"
+
+      # Both projects build macOS dylibs with absolute install names pointing
+      # at their own builders -- deliberately, since that makes them
+      # dlopen-able from a runtime with no rpath. Downloaded here those paths
+      # do not exist, so libcd's reference to libim dangles.
+      - name: Repair macOS install names
+        if: runner.os == 'macOS'
+        run: |
+          for dir in "$CD_LIBRARY_PATH" "$IM_LIBRARY_PATH"; do
+            for lib in "$dir"/lib*.dylib; do
+              [ -f "$lib" ] || continue
+              install_name_tool -id "$lib" "$lib" 2>/dev/null || true
+              otool -L "$lib" | awk 'NR>1 {print $1}' | while read -r dep; do
+                case "$dep" in
+                  */libim*.dylib|*/libcd*.dylib)
+                    base="$(basename "$dep")"
+                    for cand in "$CD_LIBRARY_PATH/$base" "$IM_LIBRARY_PATH/$base"; do
+                      [ -f "$cand" ] && install_name_tool -change "$dep" "$cand" "$lib" 2>/dev/null || true
+                    done ;;
+                esac
+              done
+            done
+          done
+          otool -L "$CD_LIBRARY_PATH"/libcd*.dylib | head -8
 
       - name: Install and configure ocicl
         run: |
