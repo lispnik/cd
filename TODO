@@ -1,4 +1,34 @@
 TODO
 
-* Check usage of finallizers
-* CD Play/Register callbacks
+The rewrite is complete: FFI layer, canvas lifetime, drivers, drawing, world
+coordinates, clipping and transforms, images, the IM bridge, and replay.
+243 bindings, 0 public-but-unbound, 177 tests.
+
+Not wrapped, deliberately
+* cdCanvasPutBitmap / cdCanvasGetBitmap. Bound but unwrapped: CD's own
+  documentation steers toward the RGB entry points and the IM bridge for
+  anything a caller would reach for a bitmap to do. Wrap them if a use
+  turns up rather than on principle.
+* The global "active canvas" API (cdLine, cdBox, cdActivate, and the wd*
+  equivalents). Excluded by design -- it cannot be made safe with more than
+  one canvas or more than one thread, and every function has a cdCanvas*
+  counterpart that is wrapped.
+* Driver internals from cd_private.h. Exported by libcd only because it is
+  one shared object with no symbol visibility.
+
+Open questions
+* Releases. The binding is library-only, so there is no binary to ship; it
+  could stay source-only via ocicl, or tag source releases.
+
+Upstream
+* lispnik/tecgraf-cd emits no repository_dispatch, so a CD change does not
+  rebuild these bindings. .github/workflows/ci.yml already listens for
+  tecgraf-cd-build-complete; the sender is the missing half. See the
+  equivalent notify-downstream.yml in lispnik/tecgraf-im.
+* Its arm64 Linux job was added (lispnik/tecgraf-cd 3c697c5). Note that
+  changed the Linux artifact names to cd-linux-<arch>-<build_type>.
+
+Known noise
+* Loading CD prints JasPer's deprecation banner, because CD links libim and
+  the Homebrew tecgraf-im was built before IM_BUILD_JP2 defaulted to OFF.
+  A rebuild of that formula silences it. Harmless, and on stderr.

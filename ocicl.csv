@@ -9,6 +9,9 @@ cffi-libffi, ghcr.io/ocicl/cffi@sha256:d415b2cde8431fb3e7d5fc358fccb4aaa0a028dd8
 cffi-tests, ghcr.io/ocicl/cffi@sha256:d415b2cde8431fb3e7d5fc358fccb4aaa0a028dd8819e14608b4d245d0bff9e4, cffi-20250822-dad3520/cffi-tests.asd
 cffi-toolchain, ghcr.io/ocicl/cffi@sha256:d415b2cde8431fb3e7d5fc358fccb4aaa0a028dd8819e14608b4d245d0bff9e4, cffi-20250822-dad3520/cffi-toolchain.asd
 cffi-uffi-compat, ghcr.io/ocicl/cffi@sha256:d415b2cde8431fb3e7d5fc358fccb4aaa0a028dd8819e14608b4d245d0bff9e4, cffi-20250822-dad3520/cffi-uffi-compat.asd
+cl-ppcre, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre.asd
+cl-ppcre-unicode, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre-unicode.asd
 trivial-features, ghcr.io/ocicl/trivial-features@sha256:e278e24d39060fc7d3715531b16ddd9ab7f93f22ade53e436c0b86dbae3aa065, trivial-features-1.0/trivial-features.asd
 trivial-features-tests, ghcr.io/ocicl/trivial-features@sha256:e278e24d39060fc7d3715531b16ddd9ab7f93f22ade53e436c0b86dbae3aa065, trivial-features-1.0/trivial-features-tests.asd
+trivial-garbage, ghcr.io/ocicl/trivial-garbage@sha256:84741c1d2d5be9e6b7466a8a7aefd82d74bedf7473b7331937f61e68df162d89, trivial-garbage-20260822-2f293dd/trivial-garbage.asd
 uffi, ghcr.io/ocicl/cffi@sha256:d415b2cde8431fb3e7d5fc358fccb4aaa0a028dd8819e14608b4d245d0bff9e4, cffi-20250822-dad3520/uffi-compat/uffi.asd

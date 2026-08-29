@@ -2,213 +2,190 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master, 'feat/*']
   pull_request:
-    branches: [ main, master ]
-  # Trigger when tecgraf-cd or tecgraf-im builds complete
+    branches: [main, master]
+  workflow_dispatch:
+  # lispnik/tecgraf-cd does not emit one of these yet. Listening now means the
+  # wiring is already in place when it does; until then this is inert.
   repository_dispatch:
-    types: [tecgraf-cd-build-complete, tecgraf-im-build-complete]
+    types: [tecgraf-cd-build-complete]
 
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        lisp: [sbcl]
-        include:
-          - os: ubuntu-latest
-            platform: linux
-            cd-workflow: ci-linux.yml
-            im-workflow: ci-linux.yml
-            cd-libs-artifact: cd-linux-Release
-            im-libs-artifact: im-libs-ubuntu-24.04
-            im-headers-artifact: im-headers-ubuntu-24.04
-          - os: macos-latest
-            platform: macos
-            cd-workflow: ci-macos.yml
-            im-workflow: ci-macos.yml
-            cd-libs-artifact: cd-macos-Release
-            im-libs-artifact: im-libs-macos-15
-            im-headers-artifact: im-headers-macos-15
-
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    strategy:
+      # One platform failing must not hide the others.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux amd64
+            os: ubuntu-24.04
+            source: brew
+          # No upstream artifact is needed here: brew builds CD and IM from
+          # source, so the arm64 Linux leg works on the same footing as amd64.
+          # Upstream now publishes arm64 artifacts too, for consumers that
+          # take the artifact route.
+          - name: Linux arm64
+            os: ubuntu-24.04-arm
+            source: brew
+          - name: macOS arm64
+            os: macos-15
+            source: brew
+          # Windows has no Homebrew, so it consumes the upstream CI artifacts
+          # instead. Both are needed: libcd links against libim, and the CD
+          # artifact carries only CD's own install tree.
+          - name: Windows x64
+            os: windows-2022
+            source: artifacts
+            cd-artifact: cd-windows-Release
+            im-artifact: im-libs-windows-2022
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install Common Lisp (${{ matrix.lisp }})
-      uses: 40ants/setup-lisp@v4
-      with:
-        asdf-system: cd
-        qlfile-template: |
-          dist ultralisp http://dist.ultralisp.org/
-        lisp: ${{ matrix.lisp }}
+      - name: Install SBCL (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends sbcl
 
-    - name: Install system dependencies (Linux)
-      if: matrix.platform == 'linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libx11-6 \
-          libxext6 \
-          libxrender1 \
-          libxft2 \
-          libcairo2 \
-          libpango1.0-0 \
-          libfreetype6 \
-          libftgl2 \
-          libgl1-mesa-glx \
-          libglu1-mesa \
-          liblua5.4-0 \
-          lua5.4 \
-          libtiff6 \
-          libpng16-16 \
-          libjpeg8 \
-          zlib1g \
-          libexif12 \
-          liblzf1 \
-          liblz4-1 \
-          libfftw3-3 \
-          libgomp1 \
-          libgtk-3-0
+      - name: Install SBCL (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sbcl
 
-    - name: Install system dependencies (macOS)
-      if: matrix.platform == 'macos'
-      run: |
-        brew install \
-          cairo \
-          pango \
-          freetype \
-          ftgl \
-          lua \
-          libtiff \
-          libpng \
-          jpeg \
-          libexif \
-          jasper \
-          fftw
+      - name: Install SBCL (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install sbcl --no-progress -y
+          cygpath -w "/c/Program Files/Steel Bank Common Lisp" >> "$GITHUB_PATH"
 
-    - name: Wait for tecgraf-im build completion
-      uses: fountainhead/action-wait-for-check@v1.1.0
-      id: wait-for-im-build
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        checkName: build (${{ matrix.os }}, Release)
-        ref: master
-        repo: lispnik/tecgraf-im
-        timeoutSeconds: 1800
-        intervalSeconds: 30
+      # CD and IM both come from the maintainer's tap, and tecgraf-cd already
+      # depends_on tecgraf-im -- so one install provides both libraries and
+      # every third-party dependency they were linked against.
+      #
+      # This is deliberately not the artifact route used for Windows below.
+      # Artifacts have to be paired by upstream run, unpacked, and on macOS
+      # repaired with install_name_tool because they carry absolute install
+      # names baked to the builder's path. brew has none of those problems;
+      # the cost is that the formulae build from source, so this step is the
+      # slow one.
+      - name: Install CD and IM from the tap
+        if: matrix.source == 'brew'
+        run: |
+          brew tap lispnik/tecgraf
+          brew install lispnik/tecgraf/tecgraf-cd
+          echo "CD_LIBRARY_PATH=$(brew --prefix tecgraf-cd)/lib" >> "$GITHUB_ENV"
+          echo "IM_LIBRARY_PATH=$(brew --prefix tecgraf-im)/lib" >> "$GITHUB_ENV"
+          ls -la "$(brew --prefix tecgraf-cd)/lib" "$(brew --prefix tecgraf-im)/lib"
 
-    - name: Wait for tecgraf-cd build completion
-      uses: fountainhead/action-wait-for-check@v1.1.0
-      id: wait-for-cd-build
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        checkName: build (${{ matrix.os }}, Release)
-        ref: main
-        repo: lispnik/tecgraf-cd
-        timeoutSeconds: 1800
-        intervalSeconds: 30
+      - name: Download CD artifact (Windows)
+        if: matrix.source == 'artifacts'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repo: lispnik/tecgraf-cd
+          workflow: ci-windows.yml
+          # tecgraf-cd's default branch is main; tecgraf-im's is master.
+          branch: main
+          name: ${{ matrix.cd-artifact }}
+          path: cd-libs/
 
-    - name: Download IM library artifacts
-      if: steps.wait-for-im-build.outputs.conclusion == 'success'
-      uses: dawidd6/action-download-artifact@v2
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        workflow: ${{ matrix.im-workflow }}
-        repo: lispnik/tecgraf-im
-        branch: master
-        name: ${{ matrix.im-libs-artifact }}
-        path: im-libs/
+      - name: Download IM artifact (Windows)
+        if: matrix.source == 'artifacts'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repo: lispnik/tecgraf-im
+          workflow: ci-windows.yml
+          branch: master
+          name: ${{ matrix.im-artifact }}
+          path: im-libs/
 
-    - name: Download IM header artifacts
-      if: steps.wait-for-im-build.outputs.conclusion == 'success'
-      uses: dawidd6/action-download-artifact@v2
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        workflow: ${{ matrix.im-workflow }}
-        repo: lispnik/tecgraf-im
-        branch: master
-        name: ${{ matrix.im-headers-artifact }}
-        path: im-headers/
+      - name: Unpack and locate the libraries (Windows)
+        if: matrix.source == 'artifacts'
+        run: |
+          # The CD artifact is a tarball of the install tree, not a flat
+          # directory of libraries the way IM's is.
+          find cd-libs -name '*.tar.gz' -exec tar -xzf {} -C cd-libs \; || true
+          cd_dir="$(dirname "$(find cd-libs -name 'cd.dll' -o -name 'libcd.dll' | head -1)")"
+          test -n "$cd_dir" || { echo "::error::no cd.dll in the artifact"; ls -R cd-libs; exit 1; }
+          echo "CD_LIBRARY_PATH=$(cygpath -m "$PWD/$cd_dir")" >> "$GITHUB_ENV"
+          echo "IM_LIBRARY_PATH=$(cygpath -m "$PWD/im-libs")" >> "$GITHUB_ENV"
+          # Windows resolves dependent DLLs through PATH, and these load each
+          # other, so both directories have to be on it.
+          cygpath -w "$PWD/$cd_dir" >> "$GITHUB_PATH"
+          cygpath -w "$PWD/im-libs" >> "$GITHUB_PATH"
 
-    - name: Download CD library artifacts
-      if: steps.wait-for-cd-build.outputs.conclusion == 'success'
-      uses: dawidd6/action-download-artifact@v2
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        workflow: ${{ matrix.cd-workflow }}
-        repo: lispnik/tecgraf-cd
-        branch: main
-        name: ${{ matrix.cd-libs-artifact }}
-        path: cd-artifacts/
+      - name: Install and configure ocicl
+        run: |
+          git clone --depth 1 https://github.com/ocicl/ocicl.git "$HOME/ocicl-src"
+          ( cd "$HOME/ocicl-src" && sbcl --non-interactive --load setup.lisp )
+          bin="$(find "$HOME" -type f \( -name ocicl -o -name ocicl.exe \) 2>/dev/null \
+                   | grep -v '/ocicl-src/' | head -1)"
+          test -n "$bin" || { echo "ocicl binary not found after setup"; exit 1; }
+          dirname "$bin" >> "$GITHUB_PATH"
 
-    - name: Extract CD libraries
-      run: |
-        cd cd-artifacts
-        tar -xzf *.tar.gz
-        ls -la install/
-        find install/ -name "*.so" -o -name "*.dylib" -o -name "*.dll"
+      - name: Restore dependencies
+        run: |
+          ocicl setup
+          ocicl install
 
-    - name: Setup library paths (Linux)
-      if: matrix.platform == 'linux'
-      run: |
-        echo "LD_LIBRARY_PATH=$PWD/im-libs:$PWD/cd-artifacts/install/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-        ls -la im-libs/
-        ls -la cd-artifacts/install/lib/
+      # The im BINDINGS -- the Lisp system, not the C library -- are a sibling
+      # project rather than an ocicl registry system, so there is nothing for
+      # ocicl to fetch. Clone it and put it on the source registry beside this
+      # checkout.
+      - name: Check out the im bindings
+        run: git clone --depth 1 https://github.com/lispnik/im.git "$HOME/im"
 
-    - name: Setup library paths (macOS)
-      if: matrix.platform == 'macos'
-      run: |
-        echo "DYLD_LIBRARY_PATH=$PWD/im-libs:$PWD/cd-artifacts/install/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
-        ls -la im-libs/
-        ls -la cd-artifacts/install/lib/
+      - name: Set up the source registry
+        run: |
+          tree="$PWD"; im="$HOME/im"
+          if [ "$RUNNER_OS" = Windows ]; then
+            tree="$(cygpath -m "$tree")"; im="$(cygpath -m "$im")"
+          fi
+          echo "LISP_TREE=$tree" >> "$GITHUB_ENV"
+          echo "LISP_IM=$im" >> "$GITHUB_ENV"
 
-    - name: Test library loading
-      run: |
-        ${{ matrix.lisp }} --eval "(progn
-          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
-          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
-          (ql:quickload :cd-cffi)
-          (format t \"~%CD library loaded successfully~%\")
-          (quit))"
+      - name: Report what loaded
+        run: |
+          sbcl --non-interactive \
+            --eval '(require :asdf)' \
+            --eval "(asdf:initialize-source-registry '(:source-registry (:tree \"$LISP_TREE\") (:tree \"$LISP_IM\") :ignore-inherited-configuration))" \
+            --eval '(asdf:load-system :cd)' \
+            --eval '(progn
+                      (format t "~%CD ~A (~A)~%" (cd:version) (cd:version-date))
+                      (format t "libcd: ~A~%" (cd:library-pathname))
+                      (format t "drivers: ~{~A~^ ~}~%" (cd:drivers)))'
 
-    - name: Test CD with IM integration
-      run: |
-        ${{ matrix.lisp }} --eval "(progn
-          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
-          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
-          (ql:quickload :cd-im)
-          (format t \"~%CD-IM integration loaded successfully~%\")
-          (quit))"
+      - name: Test
+        run: |
+          sbcl --non-interactive \
+            --eval '(require :asdf)' \
+            --eval "(asdf:initialize-source-registry '(:source-registry (:tree \"$LISP_TREE\") (:tree \"$LISP_IM\") :ignore-inherited-configuration))" \
+            --eval '(asdf:test-system :cd)'
 
-    - name: Test CD OpenGL support
-      run: |
-        ${{ matrix.lisp }} --eval "(progn
-          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
-          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
-          (ql:quickload :cd-gl)
-          (format t \"~%CD OpenGL support loaded successfully~%\")
-          (quit))" || echo "OpenGL support not available"
-
-    - name: Test CD PDF support
-      run: |
-        ${{ matrix.lisp }} --eval "(progn
-          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
-          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
-          (ql:quickload :cd-pdf)
-          (format t \"~%CD PDF support loaded successfully~%\")
-          (quit))" || echo "PDF support not available"
-
-    - name: Run basic CD tests
-      run: |
-        ${{ matrix.lisp }} --eval "(progn
-          (push \"$PWD/im-libs/\" cffi:*foreign-library-directories*)
-          (push \"$PWD/cd-artifacts/install/lib/\" cffi:*foreign-library-directories*)
-          (ql:quickload :cd)
-          (format t \"~%Running basic CD functionality test...~%\")
-          ;; Test basic CD functionality
-          (let ((version (cd:version-number)))
-            (format t \"CD Version: ~A~%\" version))
-          (format t \"CD tests completed successfully~%\")
-          (quit))"
+      # Proves the binding draws, not merely that it loads: a canvas that
+      # creates and then writes nothing would pass every check above.
+      - name: Draw something
+        run: |
+          sbcl --non-interactive \
+            --eval '(require :asdf)' \
+            --eval "(asdf:initialize-source-registry '(:source-registry (:tree \"$LISP_TREE\") (:tree \"$LISP_IM\") :ignore-inherited-configuration))" \
+            --eval '(asdf:load-system :cd)' \
+            --eval '(progn
+                      (cd:with-canvas (c (cd:svg-canvas #p"ci-out.svg"
+                                                        :width-mm 100 :height-mm 100))
+                        (cd.ffi::%cd-canvas-line (cd:handle c) 0 0 200 200))
+                      (let ((size (with-open-file (s #p"ci-out.svg") (file-length s))))
+                        (format t "~%wrote ci-out.svg, ~D bytes~%" size)
+                        (when (zerop size)
+                          (format *error-output* "empty SVG~%")
+                          (uiop:quit 1))))'
+          head -3 ci-out.svg
