@@ -139,11 +139,25 @@ jobs:
 
       - name: Unpack and locate the libraries
         run: |
-          # CD ships a tarball of its install tree; IM ships build/lib
-          # directly. Untar whatever is there and then search, rather than
-          # assuming either shape.
-          find cd-libs -name '*.tar.gz' -exec tar -xzf {} -C cd-libs \; || true
-          echo "CD artifact:"; ls -R cd-libs | head -30
+          # Three shapes to cope with, decided by each upstream job rather
+          # than by any convention: CD ships a tarball of its install tree on
+          # Linux and macOS, a *zip* of the same on Windows, and IM ships
+          # build/lib directly. Unpack whatever is actually there and then
+          # search, rather than assuming a shape -- assuming tar is what made
+          # Windows fail with "no libcd in the CD artifact" while the DLL sat
+          # inside an unopened zip.
+          for t in $(find cd-libs im-libs -name '*.tar.gz'); do
+            tar -xzf "$t" -C "$(dirname "$t")" || true
+          done
+          for z in $(find cd-libs im-libs -name '*.zip'); do
+            d="$(dirname "$z")"
+            # Git Bash on the Windows runner has no unzip; 7z and Python are
+            # both there, so fall through rather than depend on one of them.
+            if command -v unzip >/dev/null 2>&1; then unzip -q -o "$z" -d "$d"
+            elif command -v 7z >/dev/null 2>&1; then 7z x -y -o"$d" "$z" >/dev/null
+            else python -m zipfile -e "$z" "$d"; fi
+          done
+          echo "CD artifact:"; ls -R cd-libs | head -40
 
           # Test the search result BEFORE dirname. `dirname ""` is ".", which
           # is non-empty, so a guard placed after it passes on an empty search;
@@ -238,7 +252,10 @@ jobs:
               for lib in "$CD_LIBRARY_PATH"/libcd.so* "$IM_LIBRARY_PATH"/libim.so*; do
                 [ -f "$lib" ] || continue
                 echo "== $lib"; objdump -p "$lib" 2>/dev/null | grep NEEDED || true
-                ldd "$lib" 2>/dev/null | grep -i "not found" || true
+                # Print ldd in full. Grepping only for "not found" and sending
+                # stderr to /dev/null made a *failing* ldd look identical to a
+                # clean one -- it printed nothing either way.
+                ldd "$lib" 2>&1 || true
               done ;;
             macOS)
               for lib in "$CD_LIBRARY_PATH"/libcd*.dylib "$IM_LIBRARY_PATH"/libim.dylib; do

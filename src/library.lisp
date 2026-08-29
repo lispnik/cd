@@ -85,6 +85,37 @@ A message that lists what was actually tried is the one thing that turns
         #+(and unix (not darwin)) "libcd.so.5"
         #+windows "cd.dll" #+windows "libcd.dll"))
 
+(defun %probe-candidates ()
+  "Open each candidate individually, collecting what each attempt reported.
+
+CFFI's (:OR ...) form discards the dlopen error for every alternative and
+reports only which names it tried, so a failure says no more than that libcd
+would not open. That is the wrong end of the problem: dlopen reports a missing
+*transitive* dependency exactly as it reports a missing library, and the
+message naming the real culprit -- libftgl.so.2, libOpenGL.so.0 -- is the one
+CFFI drops. Retrying one candidate at a time is what recovers it.
+
+Only reached on the failure path, where the extra dlopen attempts cost nothing
+against having something to read."
+  (let ((reports '()))
+    (dolist (dir (append (%search-directories) (list nil)) (nreverse reports))
+      (dolist (name (%candidate-names))
+        (let* ((path (if dir (uiop:merge-pathnames* name dir) name))
+               ;; A bare name is worth trying even with no directory, since
+               ;; that is the loader's own search; a name under a directory is
+               ;; not, unless the file is actually there.
+               (worth-trying (or (null dir) (uiop:file-exists-p path))))
+          (when worth-trying
+            (push (handler-case
+                      (progn (cffi:load-foreign-library
+                              (if dir (namestring path) name))
+                             (format nil "~A: opened" path))
+                    (cl:error (e)
+                      (format nil "~A: ~A" path
+                              (string-trim '(#\Space #\Newline #\Tab)
+                                           (princ-to-string e)))))
+                  reports)))))))
+
 (defun load-libraries ()
   "Open libcd. Safe to call again."
   (let ((cffi:*foreign-library-directories*
@@ -104,7 +135,7 @@ A message that lists what was actually tried is the one thing that turns
                                (mapcar (lambda (d)
                                          (format nil "~A (directory searched)" d))
                                        (%search-directories))
-                               (%candidate-names)
+                               (%probe-candidates)
                                (list (princ-to-string e))))))))
 
 ;;; Version -------------------------------------------------------------------
