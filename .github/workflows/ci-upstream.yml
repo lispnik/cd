@@ -1,22 +1,23 @@
-name: CI
+name: CI (upstream HEAD)
 
-# Build against the pinned tecgraf releases: what a user who installs CD and
-# IM actually gets. Release assets do not expire and do not move, so a red run
-# here means this binding changed, not that upstream did.
+# Test against tecgraf-cd's *unreleased* tip, so an upstream regression is
+# found before it reaches a release rather than after.
 #
-# Testing upstream's unreleased tip is ci-upstream.yml's job. Splitting them
-# keeps the two kinds of breakage apart -- and this workflow no longer depends
-# on CI artifacts, which expire after 14 days and could turn it red for
-# reasons unconnected to any commit here.
+# The counterpart is ci.yml, which builds against the pinned release. The two
+# answer different questions and fail for different reasons:
+#
+#   ci.yml red          the binding is broken against what users install
+#   ci-upstream.yml red upstream master broke us, and has not shipped yet
+#
+# Only tecgraf-cd varies here. IM stays pinned to its release, so when this
+# goes red there is exactly one thing that changed.
 on:
-  push:
-    branches: [main, master, 'feat/*']
-  pull_request:
-    branches: [main, master]
+  repository_dispatch:
+    types: [tecgraf-cd-build-complete]
   workflow_dispatch:
 
 env:
-  CD_VERSION: v2.0.0
+  # IM is held at its release even here; see above.
   IM_VERSION: v2.0.0
 
 jobs:
@@ -31,16 +32,24 @@ jobs:
         include:
           - name: Linux amd64
             os: ubuntu-24.04
-            asset: linux-amd64
+            cd-artifact: cd-linux-amd64-Release
+            run-key: linux_run_id
+            im_asset: linux-amd64
           - name: Linux arm64
             os: ubuntu-24.04-arm
-            asset: linux-arm64
+            cd-artifact: cd-linux-arm64-Release
+            run-key: linux_run_id
+            im_asset: linux-arm64
           - name: macOS arm64
             os: macos-15
-            asset: macos-arm64
+            cd-artifact: cd-macos-Release-arm64
+            run-key: macos_run_id
+            im_asset: macos-arm64
           - name: Windows x64
             os: windows-2022
-            asset: windows-x64
+            cd-artifact: cd-windows-Release
+            run-key: windows_run_id
+            im_asset: windows-x64
 
     defaults:
       run:
@@ -112,26 +121,38 @@ jobs:
           brew install libtiff jpeg-turbo libpng libexif liblzf lz4 fftw libomp \
                        cairo pango freetype fontconfig glib ftgl lua
 
-      # Release archives, not CI artifacts. Both are installed trees, so the
-      # unpack step below finds lib/ and include/ in each without caring which
-      # upstream workflow produced them.
-      - name: Download CD ${{ env.CD_VERSION }} and IM ${{ env.IM_VERSION }}
+      - name: Report what this run is testing
+        run: |
+          echo "tecgraf-cd commit: ${{ github.event.client_payload.sha }}"
+          echo "run id for this platform: ${{ github.event.client_payload[matrix.run-key] }}"
+          echo "IM pinned at: $IM_VERSION"
+
+      # By run id, not "latest run on branch". The notifier collects all three
+      # platform run ids at one commit and sends them in the payload; resolving
+      # "latest" per platform instead can pair a Linux build of one commit with
+      # a Windows build of another, which produces failures nobody can
+      # reproduce.
+      - name: Download the CD libraries for that exact commit
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repo: lispnik/tecgraf-cd
+          run_id: ${{ github.event.client_payload[matrix.run-key] }}
+          name: ${{ matrix.cd-artifact }}
+          path: cd-libs/
+
+      - name: Download IM ${{ env.IM_VERSION }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          mkdir -p im-libs
           case "$RUNNER_OS" in
-            Windows) ext=zip ;;
-            *)       ext=tar.gz ;;
+            Windows) asset="tecgraf-im-${IM_VERSION}-${{ matrix.im_asset }}.zip" ;;
+            *)       asset="tecgraf-im-${IM_VERSION}-${{ matrix.im_asset }}.tar.gz" ;;
           esac
-          mkdir -p cd-libs im-libs
-          gh release download "$CD_VERSION" --repo lispnik/tecgraf-cd \
-            --pattern "tecgraf-cd-${CD_VERSION}-${{ matrix.asset }}.${ext}" \
-            --dir cd-libs --clobber
           gh release download "$IM_VERSION" --repo lispnik/tecgraf-im \
-            --pattern "tecgraf-im-${IM_VERSION}-${{ matrix.asset }}.${ext}" \
-            --dir im-libs --clobber
-          ls -la cd-libs im-libs
+            --pattern "$asset" --dir im-libs --clobber
 
       - name: Unpack and locate the libraries
         run: |
