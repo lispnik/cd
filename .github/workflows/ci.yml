@@ -80,6 +80,18 @@ jobs:
         if: matrix.source == 'brew'
         run: |
           brew tap lispnik/tecgraf
+          # Homebrew now refuses to load a formula from an untrusted
+          # third-party tap: "Refusing to load formula
+          # lispnik/tecgraf/tecgraf-im from untrusted tap". Trusting it is the
+          # documented answer and the right one here -- it is the same account
+          # that owns this repository. The alternative,
+          # HOMEBREW_NO_REQUIRE_TAP_TRUST=1, disables the check globally and
+          # Homebrew says it will be removed.
+          #
+          # Tolerated failure because `brew trust` is recent: an older
+          # Homebrew has no such subcommand and no such requirement, and the
+          # install below works either way.
+          brew trust lispnik/tecgraf || true
           brew install lispnik/tecgraf/tecgraf-cd
           echo "CD_LIBRARY_PATH=$(brew --prefix tecgraf-cd)/lib" >> "$GITHUB_ENV"
           echo "IM_LIBRARY_PATH=$(brew --prefix tecgraf-im)/lib" >> "$GITHUB_ENV"
@@ -114,8 +126,19 @@ jobs:
           # The CD artifact is a tarball of the install tree, not a flat
           # directory of libraries the way IM's is.
           find cd-libs -name '*.tar.gz' -exec tar -xzf {} -C cd-libs \; || true
-          cd_dir="$(dirname "$(find cd-libs -name 'cd.dll' -o -name 'libcd.dll' | head -1)")"
-          test -n "$cd_dir" || { echo "::error::no cd.dll in the artifact"; ls -R cd-libs; exit 1; }
+          echo "artifact contents:"; ls -R cd-libs | head -40
+
+          # Test the search result BEFORE dirname. `dirname ""` is ".", which
+          # is non-empty, so the guard below passed on an empty search and
+          # CD_LIBRARY_PATH became the repository root -- the binding then
+          # reported LIBRARY-NOT-FOUND having searched exactly one useless
+          # directory, several steps later and with nothing pointing here.
+          cd_dll="$(find cd-libs \( -name 'cd.dll' -o -name 'libcd.dll' \) | head -1)"
+          test -n "$cd_dll" || { echo "::error::no cd.dll in the CD artifact"; exit 1; }
+          cd_dir="$(dirname "$cd_dll")"
+          test -n "$(find im-libs -name 'im.dll' -o -name 'libim.dll' | head -1)" \
+            || { echo "::error::no im.dll in the IM artifact"; ls -R im-libs | head -20; exit 1; }
+          echo "cd.dll in $cd_dir"
           echo "CD_LIBRARY_PATH=$(cygpath -m "$PWD/$cd_dir")" >> "$GITHUB_ENV"
           echo "IM_LIBRARY_PATH=$(cygpath -m "$PWD/im-libs")" >> "$GITHUB_ENV"
           # Windows resolves dependent DLLs through PATH, and these load each
