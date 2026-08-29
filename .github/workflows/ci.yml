@@ -91,17 +91,30 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
+          # Exactly what libcd.so.5 and libim.so record as NEEDED, read off
+          # the published artifact with objdump rather than guessed:
+          #
+          #   libX11 libXrender libcairo libpangocairo libpango libgobject
+          #   libglib libfontconfig libfreetype libOpenGL libftgl
+          #
+          # pango, libOpenGL and libftgl were the three missed on the first
+          # attempt, and dlopen reports a missing transitive dependency the
+          # same way it reports a missing library -- so the binding said only
+          # that it could not load libcd.
           sudo apt-get install -y --no-install-recommends \
             libtiff6 libjpeg8 libpng16-16 zlib1g libexif12 liblzf1 liblz4-1 \
             libfftw3-double3 libfftw3-single3 libgomp1 \
-            libcairo2 libfreetype6 libfontconfig1 libglib2.0-0 \
+            libcairo2 libfreetype6 libfontconfig1 \
+            libglib2.0-0 libgobject-2.0-0 \
+            libpango-1.0-0 libpangocairo-1.0-0 \
+            libopengl0 libftgl2 \
             libx11-6 libxext6 libxrender1 libxft2 liblua5.4-0
 
       - name: Install runtime dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install libtiff jpeg-turbo libpng libexif liblzf lz4 fftw libomp \
-                       cairo freetype fontconfig glib ftgl lua
+                       cairo pango freetype fontconfig glib ftgl lua
 
       - name: Download the CD libraries
         uses: dawidd6/action-download-artifact@v6
@@ -213,6 +226,26 @@ jobs:
           fi
           echo "LISP_TREE=$tree" >> "$GITHUB_ENV"
           echo "LISP_IM=$im" >> "$GITHUB_ENV"
+
+      # A dlopen failure names the library that would not open, not the
+      # transitive dependency actually missing -- so print the link
+      # requirements before trying, and the diagnosis is in the log already
+      # when it fails.
+      - name: Show the libraries' link requirements
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              for lib in "$CD_LIBRARY_PATH"/libcd.so* "$IM_LIBRARY_PATH"/libim.so*; do
+                [ -f "$lib" ] || continue
+                echo "== $lib"; objdump -p "$lib" 2>/dev/null | grep NEEDED || true
+                ldd "$lib" 2>/dev/null | grep -i "not found" || true
+              done ;;
+            macOS)
+              for lib in "$CD_LIBRARY_PATH"/libcd*.dylib "$IM_LIBRARY_PATH"/libim.dylib; do
+                [ -f "$lib" ] || continue
+                echo "== $lib"; otool -L "$lib" | head -20
+              done ;;
+          esac
 
       - name: Report what loaded
         run: |
