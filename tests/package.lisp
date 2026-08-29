@@ -28,6 +28,17 @@
 (defun file-size (path)
   (with-open-file (s path :element-type '(unsigned-byte 8)) (file-length s)))
 
+(defmacro with-driver ((name) &body body)
+  "Run BODY only where libcd contains the NAME driver, and skip otherwise.
+
+Which drivers a libcd has is fixed when the C library is built, so a driver's
+absence is a fact about that build, not a defect in this binding. Skipping
+says so; failing would not, and a bare WHEN would let the test pass while
+asserting nothing at all."
+  `(if (cd:driver-available-p ,name)
+       (progn ,@body)
+       (skip "libcd was built without the ~A driver." ,name)))
+
 (defmacro with-im-bridge (&body body)
   "Run BODY only where libcd provides the IM bridge, and skip otherwise.
 
@@ -46,9 +57,35 @@ genuinely uncovered."
 (defun optional-binding-p (name)
   "True for a binding a legitimate build of libcd may simply not contain.
 
-Only the IM bridge so far: its entry points all carry ImImage in the name.
-Everything else this binding declares is unconditional in CD's sources."
-  (and (search "ImImage" name) t))
+CD compiles its drivers *into* libcd according to CMake options rather than
+shipping them separately, so which entry points exist is decided when the C
+library is built: the Windows CI build has no cdContextPS, cdContextPDF,
+cdContextCGM, cdContextDXF, cdContextDGN or cdContextGL, and cdContextQuartz*
+exists only on macOS. Every driver constructor is therefore conditional, as
+are the ContextPlus pair and the IM bridge.
+
+That is what CD:DRIVERS and CD:DRIVER-AVAILABLE-P are for -- the question is
+answered at runtime because it cannot be answered any earlier. Asserting these
+resolve would test how libcd was configured rather than whether this binding
+declares functions that exist.
+
+What remains asserted is every drawing primitive, attribute and canvas
+operation, which CD compiles unconditionally -- and that is the class the
+check was written for: cdCanvasBezier and cdCanvasSpline were declared in
+headers no build implements."
+  (and (or (and (eql 0 (search "cdContext" name))
+                ;; cdContext* is the driver constructors -- and four
+                ;; functions that take a context rather than returning one.
+                ;; Those are part of the context API, present in every build,
+                ;; and must stay asserted.
+                (not (member name '("cdContextCaps" "cdContextType"
+                                    "cdContextIsPlus"
+                                    "cdContextRegisterCallback")
+                             :test #'string=)))
+           (member name '("cdInitContextPlus" "cdFinishContextPlus")
+                   :test #'string=)
+           (search "ImImage" name))
+       t))
 
 ;;; ---------------------------------------------------------------------------
 
@@ -122,11 +159,12 @@ cdKillCanvas, so an unkilled canvas leaves a file no reader will accept."
       (is (search "</svg>" text) "the trailer must have been written"))))
 
 (test postscript-canvas-writes-eps
-  (let ((path (tmp-file "fig.eps")))
-    (cd:with-canvas (c (cd:postscript-canvas path :paper :a4 :encapsulated t))
-      (cd.ffi::%cd-canvas-line (cd:handle c) 0 0 100 100))
-    (with-open-file (s path)
-      (is (search "EPSF" (read-line s)) "an -e canvas must produce EPS"))))
+  (with-driver ("PS")
+    (let ((path (tmp-file "fig.eps")))
+      (cd:with-canvas (c (cd:postscript-canvas path :paper :a4 :encapsulated t))
+        (cd.ffi::%cd-canvas-line (cd:handle c) 0 0 100 100))
+      (with-open-file (s path)
+        (is (search "EPSF" (read-line s)) "an -e canvas must produce EPS")))))
 
 (test kill-is-idempotent
   (let ((c (cd:svg-canvas (tmp-file "idem.svg"))))
