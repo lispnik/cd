@@ -40,7 +40,9 @@
           canvas-size-mm
           canvas-resolution
           simulate
-          activate-state
+          activate
+          deactivate
+          borrow-canvas
           save-state
           restore-state))
 
@@ -49,6 +51,10 @@
            :documentation "The cdCanvas*, or NIL once killed.")
    (driver :initarg :driver :initform nil :reader canvas-driver
            :documentation "The driver name, for reports.")
+   (owned-p :initarg :owned-p :initform t :reader %owned-p
+            :documentation
+            "Whether KILL should call cdKillCanvas. NIL for a canvas wrapped
+around a pointer someone else owns -- see BORROW-CANVAS.")
    (finalizer-key :initform nil :accessor %finalizer-key
                   :documentation
                   "A cons whose CAR is the pointer the finalizer releases.
@@ -95,6 +101,20 @@ truncated and usually unreadable file."))
     (tg:finalize canvas (lambda () (%release key)))
     canvas))
 
+(defun borrow-canvas (pointer &key driver)
+  "Wrap a cdCanvas* owned by someone else, without taking ownership.
+
+For canvases handed to Lisp by foreign code -- an IUP control's draw
+callback, IupPlot's postdraw callback -- where the C side created the canvas
+and will destroy it. The wrapper draws through the pointer but arms no
+finalizer, and KILL merely detaches it: the underlying canvas is not
+touched."
+  (when (or (null pointer) (cffi:null-pointer-p pointer))
+    (cl:error 'canvas-creation-error
+              :detail (format nil "borrowed ~A canvas is null"
+                              (or driver "unknown"))))
+  (make-instance 'canvas :handle pointer :driver driver :owned-p nil))
+
 (defun handle (canvas)
   "The live cdCanvas* behind CANVAS, or signal INVALID-CANVAS.
 
@@ -113,8 +133,9 @@ is not optional: an unkilled PostScript or PDF canvas leaves a file no reader
 will accept."
   (when (%handle canvas)
     (setf (%handle canvas) nil)
-    (tg:cancel-finalization canvas)
-    (%release (%finalizer-key canvas)))
+    (when (%owned-p canvas)
+      (tg:cancel-finalization canvas)
+      (%release (%finalizer-key canvas))))
   nil)
 
 (defmacro with-canvas ((var form) &body body)
@@ -182,7 +203,16 @@ canvas that will not create."
           collect name))
 
 (defun %context (name)
-  "The cdContext* for NAME, or signal DRIVER-NOT-AVAILABLE."
+  "The cdContext* for NAME, or signal DRIVER-NOT-AVAILABLE.
+
+NAME is a driver name from *DRIVER-CONTEXTS*, or already a cdContext* --
+addon libraries such as IUP's cdlua-style contexts hand those out through
+their own entry points (IUP-CD:CONTEXT-IUP and friends), and they pass
+through untouched."
+  (when (cffi:pointerp name)
+    (when (cffi:null-pointer-p name)
+      (cl:error 'driver-not-available :name "null context"))
+    (return-from %context name))
   (let ((fn (cdr (assoc (string-upcase name) *driver-contexts* :test #'string=))))
     (unless (and fn (fboundp fn))
       (cl:error 'driver-not-available :name name))
@@ -198,18 +228,25 @@ The escape hatch. Prefer the per-driver constructors below, which build DATA
 from named parameters -- CD reports a malformed string by returning NULL and
 saying nothing about what it disliked."
   ;; cdCreateCanvas types its second argument void*, not char*, because a few
-  ;; drivers are handed a struct rather than a string -- the window drivers
-  ;; take a native handle. Every driver wrapped here takes a string, so it has
-  ;; to be marshalled explicitly; passing the Lisp string straight through is
-  ;; a type error at the alien boundary.
+  ;; drivers are handed a struct or a native handle rather than a string --
+  ;; the window drivers take an Ihandle* or an HWND. So DATA is either a
+  ;; string, marshalled explicitly here, or already a foreign pointer, passed
+  ;; through as-is. DRIVER, likewise, is either a name from the table or a
+  ;; cdContext* from an addon library (see %CONTEXT).
   ;;
-  ;; Freeing it on the way out is safe: the file drivers parse the string
-  ;; inside cdCreateCanvas -- opening the file and writing its header before
-  ;; returning -- and keep no reference to it.
-  (cffi:with-foreign-string (foreign data)
-    (wrap-handle (cd.ffi::%cd-create-canvas (%context driver) foreign)
-                 :driver (string-upcase driver)
-                 :detail (format nil "~A with data ~S" (string-upcase driver) data))))
+  ;; Freeing a marshalled string on the way out is safe: the file drivers
+  ;; parse the string inside cdCreateCanvas -- opening the file and writing
+  ;; its header before returning -- and keep no reference to it. A pointer
+  ;; DATA is the caller's to keep alive; the window drivers do retain it.
+  (let ((name (if (cffi:pointerp driver) "foreign context" (string-upcase driver))))
+    (if (cffi:pointerp data)
+        (wrap-handle (cd.ffi::%cd-create-canvas (%context driver) data)
+                     :driver name
+                     :detail (format nil "~A with pointer data" name))
+        (cffi:with-foreign-string (foreign data)
+          (wrap-handle (cd.ffi::%cd-create-canvas (%context driver) foreign)
+                       :driver name
+                       :detail (format nil "~A with data ~S" name data))))))
 
 ;;; Data-string construction --------------------------------------------------
 
@@ -414,13 +451,22 @@ RESTORE-STATE's counterpart cdReleaseState, which WITH-SAVED-STATE does."
   (cd.ffi::%cd-canvas-restore-state (handle canvas) state)
   canvas)
 
-(defun activate-state (canvas)
-  "Make CANVAS the target of CD's global API.
+(defun activate (canvas)
+  "Re-synchronise CANVAS with the surface behind it.
 
-Exposed only because a few CD entry points -- and any C code sharing the
-canvas -- still read the active canvas. Nothing in this binding needs it: the
-drawing operations all take their canvas explicitly."
+For a window canvas -- one created on an interactive driver such as IUP's --
+the window can resize or move between draws, and CD only notices when told.
+Call this at the top of every redraw, before asking CANVAS-SIZE or drawing
+anything; for the file and memory drivers it is a harmless no-op."
   (cd.ffi::%cd-canvas-activate (handle canvas))
+  canvas)
+
+(defun deactivate (canvas)
+  "Release CANVAS's hold on the surface behind it, for drivers that share it.
+
+The counterpart some interactive drivers want after a redraw finishes; most
+never need it."
+  (cd.ffi::%cd-canvas-deactivate (handle canvas))
   canvas)
 
 (defun simulate (canvas mode)

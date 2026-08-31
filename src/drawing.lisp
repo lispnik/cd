@@ -20,7 +20,7 @@
           clear flush
           foreground background
           line-width line-style line-join line-cap
-          interior-style hatch-style
+          interior-style hatch-style stipple
           write-mode back-opacity fill-mode
           font text-alignment text-orientation
           font-dimensions text-size
@@ -259,6 +259,33 @@ rather than 2."
   *interior-styles*)
 (%define-int-attribute hatch-style cd.ffi::%cd-canvas-hatch
   "The hatch pattern used when INTERIOR-STYLE is :hatch." *hatch-styles*)
+
+(defun stipple (canvas)
+  "The stipple used when INTERIOR-STYLE is :stipple, as a 2D bit array.
+
+Returns an (H W) array of bits -- row 0 is the bottom row, matching CD's
+origin -- or NIL when no stipple has been set."
+  (cffi:with-foreign-objects ((w :int) (h :int))
+    (let ((data (cd.ffi::%cd-canvas-get-stipple (handle canvas) w h)))
+      (unless (cffi:null-pointer-p data)
+        (let* ((width (cffi:mem-ref w :int))
+               (height (cffi:mem-ref h :int))
+               (stipple (make-array (list height width) :element-type 'bit)))
+          (dotimes (i (* width height) stipple)
+            (setf (row-major-aref stipple i)
+                  (if (zerop (cffi:mem-aref data :unsigned-char i)) 0 1))))))))
+
+(defun (setf stipple) (value canvas)
+  "Set the stipple: a 2D array whose elements are 0 (background) or 1
+\(foreground). Dimensions are (H W); CD keeps its own copy, so VALUE need not
+outlive the call. Takes effect when INTERIOR-STYLE is set to :stipple."
+  (destructuring-bind (height width) (array-dimensions value)
+    (cffi:with-foreign-object (data :unsigned-char (* width height))
+      (dotimes (i (* width height))
+        (setf (cffi:mem-aref data :unsigned-char i)
+              (if (zerop (row-major-aref value i)) 0 1)))
+      (cd.ffi::%cd-canvas-stipple (handle canvas) width height data)))
+  value)
 (%define-int-attribute write-mode cd.ffi::%cd-canvas-write-mode
   "How new drawing combines with what is there: :replace, :xor, :not-xor."
   *write-modes*)

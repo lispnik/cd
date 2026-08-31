@@ -265,3 +265,52 @@ canvas, then captured back into a new IM image."
    (im:with-image (source (im:create 16 16 :color-space-rgb :data-type-byte))
      (cd:with-canvas (c (cd:image-rgb-canvas 100 100))
        (finishes (cd:put-image c source :x 0 :y 0 :width 64 :height 64))))))
+
+;;; ---------------------------------------------------------------------------
+
+(def-suite foreign-canvas-suite :in cd-suite
+  :description "Foreign contexts, borrowed canvases, ACTIVATE.")
+(in-suite foreign-canvas-suite)
+
+(test make-canvas-accepts-a-raw-context
+  "MAKE-CANVAS with a cdContext* instead of a driver name.
+
+This is how the IUP contexts arrive: IUP-CD:CONTEXT-IUP-DBUFFER returns a
+raw pointer, not a name in *DRIVER-CONTEXTS*."
+  (cd:with-canvas (c (cd:make-canvas (cd.ffi::%cd-context-image-rgb) "8x8"))
+    (multiple-value-bind (w h) (cd:canvas-size c)
+      (is (= 8 w))
+      (is (= 8 h)))))
+
+(test borrowed-canvas-draws-but-does-not-own
+  "KILL on a borrowed canvas detaches the wrapper and leaves the C canvas
+alive -- the owner can keep using it."
+  (cd:with-canvas (owner (cd:image-rgb-canvas 16 16))
+    (let ((borrowed (cd:borrow-canvas (cd:handle owner) :driver "IMAGERGB")))
+      (finishes (cd:line borrowed 0 0 15 15))
+      (cd:kill borrowed)
+      (is (cd:killed-p borrowed))
+      (signals cd:invalid-canvas (cd:line borrowed 0 0 1 1))
+      ;; The owner's canvas must still be live and usable.
+      (finishes (cd:line owner 0 0 15 0)))))
+
+(test borrowing-null-is-reported
+  (signals cd:canvas-creation-error (cd:borrow-canvas (cffi:null-pointer))))
+
+(test activate-is-harmless-on-memory-drivers
+  (cd:with-canvas (c (cd:image-rgb-canvas 8 8))
+    (finishes (cd:activate c))))
+
+(test stipple-round-trips
+  "A bit-array stipple survives the trip through CD."
+  (cd:with-canvas (c (cd:image-rgb-canvas 32 32))
+    (let ((pattern (make-array '(4 8) :element-type 'bit)))
+      (dotimes (i 4)
+        (dotimes (j 8)
+          (setf (aref pattern i j) (mod (+ i j) 2))))
+      (setf (cd:stipple c) pattern)
+      (setf (cd:interior-style c) :stipple)
+      (let ((back (cd:stipple c)))
+        (is (equal '(4 8) (array-dimensions back)))
+        (is (equal (coerce (make-array 32 :element-type 'bit :displaced-to pattern) 'list)
+                   (coerce (make-array 32 :element-type 'bit :displaced-to back) 'list)))))))
